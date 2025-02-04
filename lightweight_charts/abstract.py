@@ -12,7 +12,7 @@ from .drawings import Box, HorizontalLine, RayLine, TrendLine, TwoPointDrawing, 
 from .topbar import TopBar
 from .util import (
     BulkRunScript, Pane, Events, IDGen, as_enum, jbool, js_json, TIME, NUM, FLOAT,
-    LINE_STYLE, MARKER_POSITION, MARKER_SHAPE, CROSSHAIR_MODE,
+    LINE_STYLE, LINE_TYPE, MARKER_POSITION, MARKER_SHAPE, CROSSHAIR_MODE,
     PRICE_SCALE_MODE, marker_position, marker_shape, js_data,
 )
 
@@ -424,7 +424,7 @@ class SeriesCommon(Pane):
 
 
 class Line(SeriesCommon):
-    def __init__(self, chart, name, color, style, width, price_line, price_label, price_scale_id=None, crosshair_marker=True):
+    def __init__(self, chart, name, color, style, type, width, price_line, price_label, price_scale_id=None, crosshair_marker=True):
 
         super().__init__(chart, name)
         self.color = color
@@ -435,6 +435,7 @@ class Line(SeriesCommon):
                 {{
                     color: '{color}',
                     lineStyle: {as_enum(style, LINE_STYLE)},
+                    lineType: {as_enum(type, LINE_TYPE)},
                     lineWidth: {width},
                     lastValueVisible: {jbool(price_label)},
                     priceLineVisible: {jbool(price_line)},
@@ -721,13 +722,13 @@ class AbstractChart(Candlestick, Pane):
 
     def create_line(
             self, name: str = '', color: str = 'rgba(214, 237, 255, 0.6)',
-            style: LINE_STYLE = 'solid', width: int = 2,
+            style: LINE_STYLE = 'solid', type: LINE_TYPE = 'simple', width: int = 2,
             price_line: bool = True, price_label: bool = True, price_scale_id: Optional[str] = None
     ) -> Line:
         """
         Creates and returns a Line object.
         """
-        self._lines.append(Line(self, name, color, style, width, price_line, price_label, price_scale_id))
+        self._lines.append(Line(self, name, color, style, type, width, price_line, price_label, price_scale_id))
         return self._lines[-1]
 
     def create_histogram(

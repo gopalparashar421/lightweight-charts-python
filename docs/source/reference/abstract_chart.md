@@ -56,7 +56,7 @@ ___
 
 
 
-```{py:method} create_line(name: str, color: COLOR, style: LINE_STYLE, width: int, price_line: bool, price_label: bool) -> Line
+```{py:method} create_line(name: str, color: COLOR, style: LINE_STYLE, type: LINE_TYPE, width: int, price_line: bool, price_label: bool) -> Line
 
 Creates and returns a Line object, representing a `LineSeries` object in Lightweight Charts and can be used to create indicators. As well as the methods described below, the `Line` object also has access to:
 

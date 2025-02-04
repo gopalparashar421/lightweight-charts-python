@@ -66,6 +66,8 @@ def jbool(b: bool): return 'true' if b is True else 'false' if b is False else N
 
 LINE_STYLE = Literal['solid', 'dotted', 'dashed', 'large_dashed', 'sparse_dotted']
 
+LINE_TYPE = Literal['simple', 'with_steps', 'curved']
+
 MARKER_POSITION = Literal['above', 'below', 'inside']
 
 MARKER_SHAPE = Literal['arrow_up', 'arrow_down', 'circle', 'square']
