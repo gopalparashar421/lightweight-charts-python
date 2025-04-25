@@ -38,7 +38,7 @@ export class TopBar {
 
     makeSwitcher(items: string[], defaultItem: string, callbackName: string, align='left') {
         const switcherElement = document.createElement('div');
-        switcherElement.style.margin = '4px 12px'
+        switcherElement.classList.add('topbar-switcher')
 
         let activeItemEl: HTMLButtonElement;
 
