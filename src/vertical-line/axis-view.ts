@@ -26,7 +26,7 @@ export class VerticalLineTimeAxisView implements ISeriesPrimitiveAxisView {
     return this._x ?? 0;
   }
   text() {
-    return "No-text";
+    return "";
   }
   textColor() {
     return "white";

@@ -18,7 +18,8 @@ export class Menu {
         this.div = document.createElement('div')
         this.div.classList.add('topbar-menu');
 
-        this.widget = this.makeButton(activeItem+' ↓', null, separator, true, align)
+        this.widget = this.makeButton(activeItem, null, separator, true, align)
+        this.widget.elem.classList.add('menu-button');
 
         this.updateMenuItems(items)
 
@@ -47,15 +48,13 @@ export class Menu {
             button.elem.addEventListener('click', () => {
                 this._clickHandler(button.elem.innerText);
             });
-            button.elem.style.margin = '4px 4px'
-            button.elem.style.padding = '2px 2px'
             this.div.appendChild(button.elem)
         })
-        this.widget.elem.innerText = items[0]+' ↓';
+        this.widget.elem.innerText = items[0];
     }
-    
+
     private _clickHandler(name: string) {
-        this.widget.elem.innerText = name+' ↓'
+        this.widget.elem.innerText = name
         window.callbackFunction(`${this.callbackName}_~_${name}`)
         this.div.style.display = 'none'
         this.isOpen = false
