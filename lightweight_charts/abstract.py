@@ -276,7 +276,6 @@ class SeriesCommon(Pane):
     def _update_markers(self):
         self.run_script(f'{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})')
 
-
     def marker_list(self, markers: list):
         """
         Creates multiple markers.\n
@@ -493,7 +492,6 @@ class Line(SeriesCommon):
         crosshair_marker=True,
         pane_index: int = None,
     ):
-
         super().__init__(chart, name, pane_index)
         self.color = color
 
@@ -570,6 +568,7 @@ class Histogram(SeriesCommon):
         scale_margin_top,
         scale_margin_bottom,
         pane_index: int = None,
+        price_scale_id: Optional[str] = None,
     ):
         super().__init__(chart, name, pane_index)
         self.color = color
@@ -581,7 +580,7 @@ class Histogram(SeriesCommon):
                 color: '{color}',
                 lastValueVisible: {jbool(price_label)},
                 priceLineVisible: {jbool(price_line)},
-                priceScaleId: '{self.id}',
+                priceScaleId: '{price_scale_id or self.id}',
                 priceFormat: {{type: "volume"}},
             }},
             {f'{pane_index}' if pane_index is not None else '0'}
@@ -888,6 +887,7 @@ class AbstractChart(Candlestick, Pane):
         scale_margin_top: float = 0.0,
         scale_margin_bottom: float = 0.0,
         pane_index: int = 0,
+        price_scale_id: Optional[str] = None,
     ) -> Histogram:
         """
         Creates and returns a Histogram object.
@@ -901,6 +901,7 @@ class AbstractChart(Candlestick, Pane):
             scale_margin_top,
             scale_margin_bottom,
             pane_index,
+            price_scale_id,
         )
 
     def lines(self) -> List[Line]:
