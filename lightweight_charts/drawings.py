@@ -30,7 +30,7 @@ class Drawing(Pane):
         for i in range(0, len(points), 2):
             formatted_points.append(make_js_point(self.chart, points[i], points[i + 1]))
         self.run_script(f'{self.id}.updatePoints({", ".join(formatted_points)})')
-        print(f'{self.id}.updatePoints({", ".join(formatted_points)})')
+        # print(f'{self.id}.updatePoints({", ".join(formatted_points)})')
 
     def delete(self):
         """
@@ -144,7 +144,7 @@ class VerticalLine(Drawing):
     def update(self, time: TIME):
         self.run_script(f'{self.id}.updatePoints({{time: {time}}})')
         # self.run_script(f'{self.id}.updatePrice({price})')
-        self.price = price
+        # self.price = price
 
     def options(self, color='#1E80F0', style='solid', width=4, text=''):
         super().options(color, style, width)
