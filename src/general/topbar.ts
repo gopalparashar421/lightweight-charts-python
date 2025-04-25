@@ -68,6 +68,7 @@ export class TopBar {
             intervalElements: items.map(createAndReturnSwitcherButton),
             setActive: (itemName: string) => {
                 const item = Array.from(switcherElement.children).find(button => button.textContent === itemName) as HTMLButtonElement;
+                if (!item) return
                 if (item == activeItemEl) return
                 activeItemEl.classList.remove('active-switcher-button');
                 item.classList.add('active-switcher-button');
