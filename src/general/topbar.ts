@@ -8,6 +8,7 @@ interface Widget {
     elem: HTMLDivElement;
     callbackName: string;
     intervalElements: HTMLButtonElement[];
+    setActive: Function;
     onItemClicked: Function;
 }
 
@@ -34,10 +35,10 @@ export class TopBar {
         this.left = createTopBarContainer('flex-start')
         this.right = createTopBarContainer('flex-end')
     }
-    
+
     makeSwitcher(items: string[], defaultItem: string, callbackName: string, align='left') {
         const switcherElement = document.createElement('div');
-        switcherElement.style.margin = '4px 12px'
+        switcherElement.classList.add('topbar-switcher')
 
         let activeItemEl: HTMLButtonElement;
 
@@ -65,6 +66,14 @@ export class TopBar {
             elem: switcherElement,
             callbackName: callbackName,
             intervalElements: items.map(createAndReturnSwitcherButton),
+            setActive: (itemName: string) => {
+                const item = Array.from(switcherElement.children).find(button => button.textContent === itemName) as HTMLButtonElement;
+                if (!item) return
+                if (item == activeItemEl) return
+                activeItemEl.classList.remove('active-switcher-button');
+                item.classList.add('active-switcher-button');
+                activeItemEl = item;
+            },
             onItemClicked: (item: HTMLButtonElement) => {
                 if (item == activeItemEl) return
                 activeItemEl.classList.remove('active-switcher-button');
