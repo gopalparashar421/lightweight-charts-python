@@ -31,6 +31,7 @@ from .util import (
     FLOAT,
     LINE_STYLE,
     LINE_TYPE,
+    LAST_PRICE_ANIMATION_MODE,
     MARKER_POSITION,
     MARKER_SHAPE,
     CROSSHAIR_MODE,
@@ -478,6 +479,14 @@ class SeriesCommon(Pane):
             end_time = self._single_datetime_format(end_time) if end_time else None
         return VerticalSpan(self, start_time, end_time, color)
 
+    def attach_primitive(self, js_constructor_call: str) -> "AttachedPrimitive":
+        """
+        Attaches a JavaScript primitive to this series.
+        :param js_constructor_call: A JavaScript expression that evaluates to a primitive object.
+        :return: An AttachedPrimitive object with a .detach() method.
+        """
+        return AttachedPrimitive(self, js_constructor_call)
+
 
 class Line(SeriesCommon):
     def __init__(
@@ -492,6 +501,7 @@ class Line(SeriesCommon):
         price_label,
         price_scale_id=None,
         crosshair_marker=True,
+        last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
         pane_index: int = None,
     ):
         super().__init__(chart, name, pane_index)
@@ -510,6 +520,7 @@ class Line(SeriesCommon):
                     priceLineVisible: {jbool(price_line)},
                     crosshairMarkerVisible: {jbool(crosshair_marker)},
                     priceScaleId: {f'"{price_scale_id}"' if price_scale_id else 'undefined'},
+                    lastPriceAnimation: {as_enum(last_price_animation, LAST_PRICE_ANIMATION_MODE)},
                     {"""autoscaleInfoProvider: () => ({
                             priceRange: {
                                 minValue: 1_000_000_000,
@@ -558,6 +569,120 @@ class Line(SeriesCommon):
             delete {self.id}
         """
         )
+
+
+class Area(SeriesCommon):
+    def __init__(
+        self,
+        chart,
+        name,
+        top_color,
+        bottom_color,
+        line_color,
+        line_width,
+        price_line,
+        price_label,
+        price_scale_id=None,
+        crosshair_marker=True,
+        last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
+        pane_index: int = None,
+    ):
+        super().__init__(chart, name, pane_index)
+        self.run_script(
+            f'''
+            {self.id} = {self._chart.id}.createAreaSeries(
+                "{name}",
+                {{
+                    topColor: '{top_color}',
+                    bottomColor: '{bottom_color}',
+                    lineColor: '{line_color}',
+                    lineWidth: {line_width},
+                    lastValueVisible: {jbool(price_label)},
+                    priceLineVisible: {jbool(price_line)},
+                    crosshairMarkerVisible: {jbool(crosshair_marker)},
+                    priceScaleId: {f'"{price_scale_id}"' if price_scale_id else 'undefined'},
+                    lastPriceAnimation: {as_enum(last_price_animation, LAST_PRICE_ANIMATION_MODE)},
+                }},
+                {pane_index if pane_index is not None else 0}
+            )
+        null'''
+        )
+
+    def delete(self):
+        """
+        Irreversibly deletes the area series.
+        """
+        self._chart._lines.remove(self) if self in self._chart._lines else None
+        self.run_script(
+            f"""
+            {self.id}legendItem = {self._chart.id}.legend._lines.find((line) => line.series == {self.id}.series)
+            {self._chart.id}.legend._lines = {self._chart.id}.legend._lines.filter((item) => item != {self.id}legendItem)
+
+            if ({self.id}legendItem) {{
+                {self._chart.id}.legend.div.removeChild({self.id}legendItem.row)
+            }}
+
+            {self._chart.id}.chart.removeSeries({self.id}.series)
+            delete {self.id}legendItem
+            delete {self.id}
+        """
+        )
+
+
+class AttachedPrimitive(Pane):
+    """
+    Wraps a JavaScript series primitive attached via series.attachPrimitive().
+    """
+
+    def __init__(self, series: "SeriesCommon", js_constructor_call: str):
+        super().__init__(series.win)
+        self._series = series
+        self.run_script(
+            f"""
+            {self.id} = {js_constructor_call};
+            {series.id}.series.attachPrimitive({self.id});
+        null"""
+        )
+
+    def detach(self):
+        """Detaches the primitive from the series."""
+        self.run_script(f"{self._series.id}.series.detachPrimitive({self.id})")
+
+    def update_options(self, options: dict):
+        """Calls applyOptions on the primitive."""
+        self.run_script(f"{self.id}.applyOptions({js_json(options)})")
+
+
+class UpDownMarkers(Pane):
+    """
+    Attaches an up/down marker primitive to a series using LWC v5's
+    createUpDownMarkers API.
+    """
+
+    def __init__(
+        self,
+        chart,
+        series: "SeriesCommon",
+        up_color: str = "#26a69a",
+        down_color: str = "#ef5350",
+    ):
+        super().__init__(chart.win)
+        self._series = series
+        self.run_script(
+            f"""
+            {self.id} = LightweightCharts.createUpDownMarkers(
+                {series.id}.series,
+                {{
+                    positiveColor: '{up_color}',
+                    negativeColor: '{down_color}',
+                }}
+            )
+        null"""
+        )
+
+    def detach(self):
+        """Detaches the up/down markers from the series."""
+        self.run_script(f"{self.id}.detach()")
 
 
 class Histogram(SeriesCommon):
@@ -909,6 +1034,51 @@ class AbstractChart(Candlestick, Pane):
             price_scale_id,
         )
 
+    def create_area(
+        self,
+        name: str = "",
+        top_color: str = "rgba(33,150,243,0.4)",
+        bottom_color: str = "rgba(33,150,243,0)",
+        line_color: str = "#2196F3",
+        line_width: int = 2,
+        price_line: bool = True,
+        price_label: bool = True,
+        price_scale_id: Optional[str] = None,
+        crosshair_marker: bool = True,
+        last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
+        pane_index: int = None,
+    ) -> "Area":
+        """
+        Creates and returns an Area series object.
+        """
+        area = Area(
+            self,
+            name,
+            top_color,
+            bottom_color,
+            line_color,
+            line_width,
+            price_line,
+            price_label,
+            price_scale_id,
+            crosshair_marker,
+            last_price_animation,
+            pane_index,
+        )
+        self._lines.append(area)
+        return area
+
+    def create_up_down_markers(
+        self,
+        series: "SeriesCommon",
+        up_color: str = "#26a69a",
+        down_color: str = "#ef5350",
+    ) -> "UpDownMarkers":
+        """
+        Attaches an UpDownMarkers primitive to the given series.
+        """
+        return UpDownMarkers(self, series, up_color, down_color)
+
     def lines(self) -> List[Line]:
         """
         Returns all lines for the chart.
@@ -1192,3 +1362,24 @@ class AbstractChart(Candlestick, Pane):
                     {self.id}.chart.removePane({pane_index});
             """
         )
+
+    def add_pane(self, height: Optional[int] = None) -> None:
+        """
+        Adds a new pane to the chart.
+        :param height: Optional height in pixels for the new pane.
+        """
+        self.run_script(
+            f"{self.id}.chart.addPane({height if height is not None else ''})"
+        )
+
+    def get_pane_count(self) -> int:
+        """
+        Returns the current number of panes in the chart.
+        """
+        return int(self.win.run_script_and_get(f"{self.id}.chart.panes().length"))
+
+    def move_pane(self, from_index: int, to_index: int):
+        """
+        Swaps two panes by their indices.
+        """
+        self.run_script(f"{self.id}.chart.swapPanes({from_index}, {to_index})")

@@ -1,4 +1,11 @@
-from .abstract import AbstractChart, Window
+from .abstract import AbstractChart, Window, Line, Area, Histogram, AttachedPrimitive, UpDownMarkers
 from .chart import Chart
 from .widgets import JupyterChart
 from .polygon import PolygonChart
+from .plugins import (
+    SessionHighlighting,
+    Tooltip,
+    BandsIndicator,
+    VolumeProfile,
+    HeatmapSeries,
+)

@@ -76,6 +76,8 @@ CROSSHAIR_MODE = Literal['normal', 'magnet', 'hidden']
 
 PRICE_SCALE_MODE = Literal['normal', 'logarithmic', 'percentage', 'index100']
 
+LAST_PRICE_ANIMATION_MODE = Literal['disabled', 'continuous', 'on_new_bar']
+
 TIME = Union[datetime, pd.Timestamp, str, float]
 
 NUM = Union[float, int]
