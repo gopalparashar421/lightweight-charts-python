@@ -21,6 +21,9 @@ Throughout the library, colors should be given as either rgb (`rgb(100, 100, 100
 ```{py:class} LINE_STYLE(Literal['solid', 'dotted', 'dashed', 'large_dashed', 'sparse_dotted'])
 ```
 
+```{py:class} LINE_TYPE(Literal['simple', 'with_steps', 'curved'])
+```
+
 ```{py:class} MARKER_POSITION(Literal['above', 'below', 'inside'])
 ```
 
