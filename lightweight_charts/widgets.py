@@ -164,7 +164,7 @@ class StreamlitChart(StaticLWC):
 
 
 class JupyterChart(StaticLWC):
-    def __init__(self, width: int = 800, height=350, inner_width=1, inner_height=1, scale_candles_only: bool = False, toolbox: bool = False):
+    def __init__(self, width: int = 800, height=350, inner_width: float=1.0, inner_height: float=1.0, scale_candles_only: bool = False, toolbox: bool = False):
         super().__init__(width, height, inner_width, inner_height, scale_candles_only, toolbox, False)
 
         self.run_script(f'''
@@ -177,7 +177,7 @@ class JupyterChart(StaticLWC):
             document.getElementById('container').style.width = '{self.width}px'
             document.getElementById('container').style.height = '100%'
             ''')
-        self.run_script(f'{self.id}.chart.resize({width}, {height})')
+        self.run_script(f'{self.id}.chart.resize({width * inner_width}, {height * inner_height})')
 
     def _load(self):
         if HTML is None:
