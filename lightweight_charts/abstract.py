@@ -503,9 +503,11 @@ class Line(SeriesCommon):
         crosshair_marker=True,
         last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
         pane_index: int = None,
+        last_price_animation: str = 'disabled',
     ):
         super().__init__(chart, name, pane_index)
         self.color = color
+        anim_mode = _LAST_PRICE_ANIMATION_MAP.get(last_price_animation, 0)
 
         self.run_script(
             f'''
@@ -988,6 +990,7 @@ class AbstractChart(Candlestick, Pane):
         price_label: bool = True,
         price_scale_id: Optional[str] = None,
         pane_index: int = None,
+        last_price_animation: str = 'disabled',
     ) -> Line:
         """
         Creates and returns a Line object.
@@ -1004,9 +1007,59 @@ class AbstractChart(Candlestick, Pane):
                 price_label,
                 price_scale_id,
                 pane_index=pane_index,
+                last_price_animation=last_price_animation,
             )
         )
         return self._lines[-1]
+
+    def create_area(
+        self,
+        name: str = "",
+        top_color: str = "rgba(33, 150, 243, 0.4)",
+        bottom_color: str = "rgba(33, 150, 243, 0.0)",
+        line_color: str = "#2196F3",
+        line_width: int = 2,
+        price_line: bool = True,
+        price_label: bool = True,
+        pane_index: int = None,
+    ) -> Area:
+        """
+        Creates and returns an Area series object.
+        """
+        return Area(
+            self,
+            name,
+            top_color,
+            bottom_color,
+            line_color,
+            line_width,
+            price_line,
+            price_label,
+            pane_index=pane_index,
+        )
+
+    def create_up_down_markers(
+        self,
+        series,
+        up_color: str = "#26a69a",
+        down_color: str = "#ef5350",
+    ) -> str:
+        """
+        Attaches UpDownMarkers to the given series and returns the primitive wrapper.
+        The *series* argument can be a :class:`Line`, :class:`Area`, or the chart itself
+        (for the main candlestick/line series).
+        """
+        series_js = f"{series.id}.series"
+        marker_id = Window._id_gen.generate()
+        self.run_script(
+            f"""
+            {marker_id} = LightweightCharts.createUpDownMarkers({series_js}, {{
+                positiveColor: '{up_color}',
+                negativeColor: '{down_color}',
+            }});
+        """
+        )
+        return marker_id
 
     def create_histogram(
         self,
