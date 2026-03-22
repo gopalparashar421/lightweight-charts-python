@@ -478,6 +478,30 @@ class SeriesCommon(Pane):
             end_time = self._single_datetime_format(end_time) if end_time else None
         return VerticalSpan(self, start_time, end_time, color)
 
+    def attach_primitive(self, js_constructor_call: str) -> "AttachedPrimitive":
+        """
+        Attaches a custom JavaScript primitive to this series.\n
+        :param js_constructor_call: A JavaScript expression that evaluates to a primitive
+            object (e.g. ``'new Lib.Plugins.SessionHighlighting({})'``).
+        :returns: An :class:`AttachedPrimitive` instance with a :meth:`~AttachedPrimitive.detach` method.
+        """
+        from .util import IDGen
+        prim_id = Window._id_gen.generate()
+        self.run_script(
+            f"""
+            {prim_id} = {js_constructor_call};
+            {self.id}.series.attachPrimitive({prim_id});
+        """
+        )
+        return AttachedPrimitive(self._chart, self.id, prim_id)
+
+
+_LAST_PRICE_ANIMATION_MAP = {
+    'disabled': 0,
+    'continuous': 1,
+    'on_data_update': 2,
+}
+
 
 class Line(SeriesCommon):
     def __init__(
@@ -493,9 +517,11 @@ class Line(SeriesCommon):
         price_scale_id=None,
         crosshair_marker=True,
         pane_index: int = None,
+        last_price_animation: str = 'disabled',
     ):
         super().__init__(chart, name, pane_index)
         self.color = color
+        anim_mode = _LAST_PRICE_ANIMATION_MAP.get(last_price_animation, 0)
 
         self.run_script(
             f'''
@@ -510,6 +536,7 @@ class Line(SeriesCommon):
                     priceLineVisible: {jbool(price_line)},
                     crosshairMarkerVisible: {jbool(crosshair_marker)},
                     priceScaleId: {f'"{price_scale_id}"' if price_scale_id else 'undefined'},
+                    lastPriceAnimation: {anim_mode},
                     {"""autoscaleInfoProvider: () => ({
                             priceRange: {
                                 minValue: 1_000_000_000,
@@ -557,6 +584,74 @@ class Line(SeriesCommon):
             delete {self.id}legendItem
             delete {self.id}
         """
+        )
+
+
+class Area(SeriesCommon):
+    def __init__(
+        self,
+        chart,
+        name,
+        top_color,
+        bottom_color,
+        line_color,
+        line_width,
+        price_line,
+        price_label,
+        pane_index: int = None,
+    ):
+        super().__init__(chart, name, pane_index)
+        self.run_script(
+            f'''
+            {self.id} = (function() {{
+                const s = {chart.id}.chart.addSeries(LightweightCharts.AreaSeries, {{
+                    topColor: '{top_color}',
+                    bottomColor: '{bottom_color}',
+                    lineColor: '{line_color}',
+                    lineWidth: {line_width},
+                    lastValueVisible: {jbool(price_label)},
+                    priceLineVisible: {jbool(price_line)},
+                }}, {pane_index if pane_index is not None else 0});
+                {chart.id}._seriesList.push(s);
+                {chart.id}.legend.makeSeriesRow('{name}', s);
+                return {{name: '{name}', series: s}};
+            }})();
+            null
+        '''
+        )
+
+    def delete(self):
+        """
+        Irreversibly deletes the area series.
+        """
+        self.run_script(
+            f"""
+            {self.id}legendItem = {self._chart.id}.legend._lines.find((line) => line.series == {self.id}.series)
+            {self._chart.id}.legend._lines = {self._chart.id}.legend._lines.filter((item) => item != {self.id}legendItem)
+
+            if ({self.id}legendItem) {{
+                {self._chart.id}.legend.div.removeChild({self.id}legendItem.row)
+            }}
+
+            {self._chart.id}.chart.removeSeries({self.id}.series)
+            delete {self.id}legendItem
+            delete {self.id}
+        """
+        )
+
+
+class AttachedPrimitive:
+    """Represents a primitive attached to a series via :meth:`SeriesCommon.attach_primitive`."""
+
+    def __init__(self, chart, series_id: str, primitive_id: str):
+        self._chart = chart
+        self._series_id = series_id
+        self._primitive_id = primitive_id
+
+    def detach(self):
+        """Detaches the primitive from its series."""
+        self._chart.run_script(
+            f"{self._series_id}.series.detachPrimitive({self._primitive_id})"
         )
 
 
@@ -863,6 +958,7 @@ class AbstractChart(Candlestick, Pane):
         price_label: bool = True,
         price_scale_id: Optional[str] = None,
         pane_index: int = None,
+        last_price_animation: str = 'disabled',
     ) -> Line:
         """
         Creates and returns a Line object.
@@ -879,9 +975,59 @@ class AbstractChart(Candlestick, Pane):
                 price_label,
                 price_scale_id,
                 pane_index=pane_index,
+                last_price_animation=last_price_animation,
             )
         )
         return self._lines[-1]
+
+    def create_area(
+        self,
+        name: str = "",
+        top_color: str = "rgba(33, 150, 243, 0.4)",
+        bottom_color: str = "rgba(33, 150, 243, 0.0)",
+        line_color: str = "#2196F3",
+        line_width: int = 2,
+        price_line: bool = True,
+        price_label: bool = True,
+        pane_index: int = None,
+    ) -> Area:
+        """
+        Creates and returns an Area series object.
+        """
+        return Area(
+            self,
+            name,
+            top_color,
+            bottom_color,
+            line_color,
+            line_width,
+            price_line,
+            price_label,
+            pane_index=pane_index,
+        )
+
+    def create_up_down_markers(
+        self,
+        series,
+        up_color: str = "#26a69a",
+        down_color: str = "#ef5350",
+    ) -> str:
+        """
+        Attaches UpDownMarkers to the given series and returns the primitive wrapper.
+        The *series* argument can be a :class:`Line`, :class:`Area`, or the chart itself
+        (for the main candlestick/line series).
+        """
+        series_js = f"{series.id}.series"
+        marker_id = Window._id_gen.generate()
+        self.run_script(
+            f"""
+            {marker_id} = LightweightCharts.createUpDownMarkers({series_js}, {{
+                positiveColor: '{up_color}',
+                negativeColor: '{down_color}',
+            }});
+        """
+        )
+        return marker_id
 
     def create_histogram(
         self,
@@ -1191,4 +1337,54 @@ class AbstractChart(Candlestick, Pane):
             f"""
                     {self.id}.chart.removePane({pane_index});
             """
+        )
+
+    def add_pane(self, height: Optional[int] = None):
+        """
+        Adds a new pane to the chart.  The pane is created by inserting a hidden
+        placeholder series at the next pane index so that LightweightCharts
+        allocates the pane immediately.
+
+        :param height: Optional pixel height for the new pane.
+        """
+        if not hasattr(self, '_extra_panes'):
+            self._extra_panes: list = []
+        pane_index = 1 + len(self._extra_panes)
+        placeholder_id = Window._id_gen.generate()
+        height_js = (
+            f"{self.id}.chart.panes()[{pane_index}].setHeight({height});"
+            if height is not None
+            else ""
+        )
+        self.run_script(
+            f"""
+            {placeholder_id} = {self.id}.chart.addSeries(
+                LightweightCharts.LineSeries,
+                {{visible: false, priceLineVisible: false, lastValueVisible: false}},
+                {pane_index}
+            );
+            {placeholder_id}.setData([]);
+            {height_js}
+        """
+        )
+        self._extra_panes.append(placeholder_id)
+
+    def get_pane_count(self) -> int:
+        """
+        Returns the number of panes currently shown on the chart.
+        The count is tracked in Python to avoid a synchronous round-trip to the
+        browser.  It equals 1 (the main pane) plus the number of times
+        :meth:`add_pane` has been called.
+        """
+        return 1 + len(getattr(self, '_extra_panes', []))
+
+    def move_pane(self, from_index: int, to_index: int):
+        """
+        Swaps two panes by their indices.
+
+        :param from_index: Index of the pane to move.
+        :param to_index:   Target index.
+        """
+        self.run_script(
+            f"{self.id}.chart.swapPanes({from_index}, {to_index});"
         )
