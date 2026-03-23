@@ -503,11 +503,9 @@ class Line(SeriesCommon):
         crosshair_marker=True,
         last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
         pane_index: int = None,
-        last_price_animation: str = 'disabled',
     ):
         super().__init__(chart, name, pane_index)
         self.color = color
-        anim_mode = _LAST_PRICE_ANIMATION_MAP.get(last_price_animation, 0)
 
         self.run_script(
             f'''

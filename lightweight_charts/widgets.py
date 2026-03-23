@@ -1,5 +1,6 @@
 import asyncio
 import html
+import os
 
 from .util import parse_event_message
 from lightweight_charts import abstract
@@ -121,14 +122,20 @@ class StaticLWC(abstract.AbstractChart):
             css = f.read()
         with open(abstract.INDEX.replace("index.html", 'bundle.js'), 'r') as f:
             js = f.read()
-        with open(abstract.INDEX.replace("index.html", 'lightweight-charts.js'), 'r') as f:
+        with open(abstract.INDEX.replace("index.html", 'lightweight-charts.standalone.development.js'), 'r') as f:
             lwc = f.read()
+        plugins_path = abstract.INDEX.replace("index.html", 'plugins.js')
+        plugins_js = ''
+        if os.path.exists(plugins_path):
+            with open(plugins_path, 'r') as f:
+                plugins_js = f.read()
 
         with open(abstract.INDEX, 'r') as f:
             self._html = f.read() \
                 .replace('<link rel="stylesheet" href="styles.css">', f"<style>{css}</style>") \
-                .replace(' src="./lightweight-charts.js">', f'>{lwc}') \
+                .replace(' src="./lightweight-charts.standalone.development.js">', f'>{lwc}') \
                 .replace(' src="./bundle.js">', f'>{js}') \
+                .replace(' src="./plugins.js">', f'>{plugins_js}') \
                 .replace('</body>\n</html>', '<script>')
 
         super().__init__(abstract.Window(run_script=self.run_script), inner_width, inner_height,
@@ -177,7 +184,6 @@ class JupyterChart(StaticLWC):
             document.getElementById('container').style.width = '{self.width}px'
             document.getElementById('container').style.height = '100%'
             ''')
-        self.run_script(f'{self.id}.chart.resize({width * inner_width}, {height * inner_height})')
 
     def _load(self):
         if HTML is None:
