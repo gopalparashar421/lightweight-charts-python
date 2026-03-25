@@ -13,6 +13,7 @@
     "vite": "^4.3.1"
   },
   "dependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.60.0",
     "dts-bundle-generator": "^8.0.1",
     "fancy-canvas": "^2.1.0",
     "lightweight-charts": "^5.0.3",
