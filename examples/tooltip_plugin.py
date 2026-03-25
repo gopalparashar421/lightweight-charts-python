@@ -16,8 +16,13 @@ df = pd.DataFrame({'time': dates, 'open': open_, 'high': high, 'low': low, 'clos
 chart = Chart()
 chart.set(df)
 
-tooltip = Tooltip(chart, title='OHLCV', font_size=12,
-                  color='rgba(255,255,255,0.9)', background='rgba(15,15,15,0.85)')
+# Attach tooltip to the main candlestick series
+tooltip = Tooltip(
+    chart,
+    line_color='rgba(0, 0, 0, 0.2)',
+    follow_mode='top',
+    title='OHLCV',
+)
 
 chart.fit()
 chart.show(block=True)

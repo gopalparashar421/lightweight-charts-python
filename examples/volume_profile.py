@@ -16,11 +16,23 @@ df = pd.DataFrame({'time': dates, 'open': open_, 'high': high, 'low': low, 'clos
 chart = Chart()
 chart.set(df)
 
-vp = VolumeProfile(chart,
-                   up_color='rgba(38, 166, 154, 0.5)',
-                   down_color='rgba(239, 83, 80, 0.5)',
-                   width_factor=0.35)
-vp.set_data(df)
+# Build a price-level profile from the last 50 bars
+anchor_idx = n - 50
+base_price = close[anchor_idx]
+price_step = max(0.5, round(base_price * 0.02, 1))
+n_bins = 15
+profile = [
+    {'price': round(base_price + i * price_step, 4),
+     'vol':   float(volume[anchor_idx: anchor_idx + n_bins].mean() * np.random.uniform(0.3, 1.0))}
+    for i in range(n_bins)
+]
+
+vp = VolumeProfile(
+    chart,
+    time=dates[anchor_idx],
+    profile=profile,
+    width=10,
+)
 
 chart.fit()
 chart.show(block=True)

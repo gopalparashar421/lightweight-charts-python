@@ -8,15 +8,14 @@ n_time = 60
 n_levels = 20
 dates = pd.date_range('2024-01-01', periods=n_time, freq='1H')
 
-# Build heatmap data: each row = one time point, with multiple price-level intensities
-# Format: time, low, high, value  (one row per price bucket per time)
+# Each row is one price cell: same time may appear multiple times (one row per level)
 rows = []
 base_price = 100.0
-for i, ts in enumerate(dates):
+for ts in dates:
     for j in range(n_levels):
-        low = base_price + j * 0.5
-        high = low + 0.5
-        value = np.random.rand()  # intensity 0..1
+        low   = base_price + j * 0.5
+        high  = low + 0.5
+        value = round(np.random.rand() * 100, 2)  # 0–100 intensity
         rows.append({'time': ts, 'low': low, 'high': high, 'value': value})
 
 heatmap_df = pd.DataFrame(rows)

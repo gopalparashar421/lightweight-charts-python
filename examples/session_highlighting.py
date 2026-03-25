@@ -16,14 +16,16 @@ df = pd.DataFrame({'time': dates, 'open': open_, 'high': high, 'low': low, 'clos
 chart = Chart()
 chart.set(df)
 
-# Define 3 sessions: each 3 hours in the first 3 days
+# Attach to the main candlestick series
+sh = SessionHighlighting(chart, default_color='rgba(0,0,0,0)')
+
+# Define 3-hour morning sessions for the first three trading days
 sessions = []
 for day in pd.date_range('2024-01-01', periods=3, freq='1D'):
     start = int(pd.Timestamp(day).replace(hour=10).timestamp())
-    end = int(pd.Timestamp(day).replace(hour=13).timestamp())
+    end   = int(pd.Timestamp(day).replace(hour=13).timestamp())
     sessions.append({'start': start, 'end': end})
 
-sh = SessionHighlighting(chart, session_color='rgba(41, 98, 255, 0.08)')
 sh.set_sessions(sessions)
 
 chart.fit()
