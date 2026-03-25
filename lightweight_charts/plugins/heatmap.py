@@ -1,58 +1,83 @@
-from typing import Optional, List
 import json
+from typing import Optional, List
 import pandas as pd
 
-from ..abstract import SeriesCommon
-from ..util import Pane, js_data
+from ..util import Pane
 
 
-class HeatmapSeries(SeriesCommon):
+class HeatmapSeries(Pane):
     """
-    A custom series that renders a price-level heatmap (e.g. orderbook liquidity).
-    Uses Lib.Plugins.HeatmapSeries (a custom series pane view) from plugins.js.
+    Custom series that renders a price-level heatmap (e.g. order-book liquidity).
 
-    Each data point must have: ``time`` (Unix ts), ``low`` (float), ``high`` (float),
-    and ``value`` (float, 0–1 intensity).
+    Uses ``HeatMapSeries`` (an ``ICustomSeriesPaneView``) which is added directly
+    to the chart via ``chart.addCustomSeries``.
+
+    Each data bar holds multiple price cells.  Supply a DataFrame where each row
+    is one cell, with columns ``time``, ``low``, ``high``, and ``value`` (or
+    ``amount``).  Rows that share the same ``time`` are grouped into one bar.
 
     :param chart: The parent chart instance.
-    :param color_scale: Optional list of ``[r, g, b, a]`` stops or CSS color strings
-        that define the color gradient from 0 (min intensity) to 1 (max intensity).
+    :param cell_shader_js: Optional JavaScript function string
+        ``(amount: number) => string`` that maps an amount to a CSS color.
+        Defaults to a green gradient where 0 → dim, 100 → bright.
+    :param cell_border_width: Cell border width in pixels.
+    :param cell_border_color: CSS color for cell borders.
     :param pane_index: Pane to render in (default 0).
     """
 
     def __init__(
         self,
         chart,
-        color_scale: Optional[List] = None,
-        pane_index: int = None,
+        cell_shader_js: Optional[str] = None,
+        cell_border_width: int = 1,
+        cell_border_color: str = 'transparent',
+        pane_index: int = 0,
     ):
-        super().__init__(chart, '', pane_index)
-        color_scale_js = json.dumps(color_scale) if color_scale else 'null'
+        super().__init__(chart.win)
+        self._chart = chart
+        view_var = self.id + 'V'
+        base_opts = json.dumps({
+            'cellBorderWidth': cell_border_width,
+            'cellBorderColor': cell_border_color,
+        })
+        if cell_shader_js:
+            opts_str = base_opts[:-1] + f', "cellShader": {cell_shader_js}}}'
+        else:
+            opts_str = base_opts
         self.run_script(f'''
-            {self.id} = {chart.id}.createCustomSeries(
-                new Lib.Plugins.HeatmapSeries({{
-                    colorScale: {color_scale_js},
-                }}),
-                {{}},
-                {pane_index if pane_index is not None else 0}
-            )
+            {view_var} = new Lib.HeatMapSeries();
+            {self.id} = {chart.id}.chart.addCustomSeries({view_var}, {opts_str}, {pane_index});
         null''')
 
-    def set(self, df: pd.DataFrame, format_cols: bool = True):
+    def set(self, df: pd.DataFrame):
         """
         Sets the heatmap data.
 
-        :param df: DataFrame with columns: time, low, high, value.
-        :param format_cols: Whether to run datetime formatting on the time column.
+        :param df: DataFrame with columns ``time``, ``low``, ``high``, and
+            ``value`` (or ``amount``).  One row per price cell; rows sharing
+            the same ``time`` are grouped into one bar.
         """
         if df is None or df.empty:
-            self.run_script(f'{self.id}.series.setData([])')
+            self.run_script(f'{self.id}.setData([])')
             return
-        if format_cols:
-            df = self._df_datetime_format(df)
-        self.run_script(f'{self.id}.series.setData({js_data(df)})')
+        df = df.copy()
+        if 'value' in df.columns and 'amount' not in df.columns:
+            df = df.rename(columns={'value': 'amount'})
+        if not pd.api.types.is_datetime64_any_dtype(df['time']):
+            df['time'] = pd.to_datetime(df['time'])
+        df['time'] = df['time'].astype('int64') // 10 ** 9
+        records = []
+        for t, group in df.groupby('time', sort=True):
+            cells = group[['low', 'high', 'amount']].to_dict('records')
+            records.append({'time': int(t), 'cells': cells})
+        self.run_script(f'{self.id}.setData({json.dumps(records)})')
 
-    def update(self, series: pd.Series):
-        """Updates or appends a single heatmap bar."""
-        series = self._series_datetime_format(series)
-        self.run_script(f'{self.id}.series.update({js_data(series)})')
+    def update(self, time, cells: List[dict]):
+        """
+        Appends or updates a single bar.
+
+        :param time: The bar's timestamp (Unix seconds, datetime, or string).
+        :param cells: List of ``{'low': float, 'high': float, 'amount': float}`` dicts.
+        """
+        ts = int(pd.Timestamp(time).timestamp())
+        self.run_script(f'{self.id}.update({json.dumps({"time": ts, "cells": cells})})')

@@ -1,5 +1,4 @@
 from typing import Optional, TYPE_CHECKING
-import json
 
 from ..util import Pane
 
@@ -9,63 +8,35 @@ if TYPE_CHECKING:
 
 class BandsIndicator(Pane):
     """
-    Draws a filled band between an upper and lower line/area series.
-    Uses Lib.Plugins.BandsIndicator from plugins.js.
+    Draws ±10% band lines around a single series as an attached primitive.
 
-    The plugin is attached to the upper series, but reads data from both
-    upper and lower series to compute the fill region.
+    Upper and lower bands are auto-calculated from the series data
+    (``upper = value × 1.1``, ``lower = value × 0.9``).
 
-    :param chart: The parent chart instance.
-    :param upper_series: The upper boundary series (Line or Area).
-    :param lower_series: The lower boundary series (Line or Area).
-    :param fill_color: Fill color for the band.
-    :param upper_color: Line color for the upper boundary (unused by current renderer).
-    :param lower_color: Line color for the lower boundary (unused by current renderer).
-    :param line_width: Line width (unused by current renderer).
+    :param series: The series to attach to.
+    :param line_color: Color of the upper and lower band lines.
+    :param fill_color: Fill color of the region between the bands.
+    :param line_width: Width of the band lines in pixels.
     """
 
     def __init__(
         self,
-        chart,
-        upper_series: "SeriesCommon",
-        lower_series: "SeriesCommon",
-        fill_color: str = 'rgba(33,150,243,0.1)',
-        upper_color: str = '#2196F3',
-        lower_color: str = '#2196F3',
+        series: "SeriesCommon",
+        line_color: str = 'rgb(25, 200, 100)',
+        fill_color: str = 'rgba(25, 200, 100, 0.25)',
         line_width: int = 1,
     ):
-        super().__init__(chart.win)
-        self._chart = chart
+        super().__init__(series._chart.win)
+        self._series = series
         self.run_script(f'''
-            {self.id} = new Lib.Plugins.BandsIndicator(
-                {upper_series.id}.series,
-                {lower_series.id}.series,
-                {{
-                    fillColor: '{fill_color}',
-                    upperColor: '{upper_color}',
-                    lowerColor: '{lower_color}',
-                    lineWidth: {line_width},
-                }}
-            );
-            {upper_series.id}.series.attachPrimitive({self.id});
+            {self.id} = new Lib.BandsIndicator({{
+                lineColor: '{line_color}',
+                fillColor: '{fill_color}',
+                lineWidth: {line_width},
+            }});
+            {series.id}.series.attachPrimitive({self.id});
         null''')
 
-    def apply_options(
-        self,
-        fill_color: Optional[str] = None,
-        upper_color: Optional[str] = None,
-        lower_color: Optional[str] = None,
-        line_width: Optional[int] = None,
-    ):
-        """Updates band display options."""
-        opts = {}
-        if fill_color is not None:
-            opts['fillColor'] = fill_color
-        if upper_color is not None:
-            opts['upperColor'] = upper_color
-        if lower_color is not None:
-            opts['lowerColor'] = lower_color
-        if line_width is not None:
-            opts['lineWidth'] = line_width
-        if opts:
-            self.run_script(f'{self.id}.applyOptions({json.dumps(opts)})')
+    def delete(self):
+        """Detaches and removes the bands indicator from the series."""
+        self.run_script(f'{self._series.id}.series.detachPrimitive({self.id})')

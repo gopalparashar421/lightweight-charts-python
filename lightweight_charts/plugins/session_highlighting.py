@@ -1,47 +1,65 @@
 import json
-from typing import Optional, List
+from typing import List
 
-from ..util import Pane, js_data, js_json
+from ..util import Pane
 
 
 class SessionHighlighting(Pane):
     """
-    Highlights chart background for specific time ranges (e.g. market sessions).
-    Uses Lib.Plugins.SessionHighlighting from plugins.js.
+    Highlights chart background for specific time ranges (e.g. trading sessions).
 
-    :param chart: The parent chart instance.
-    :param session_color: Default RGBA color for session highlight bands.
+    Each bar's timestamp is checked against the supplied session windows; the first
+    matching window's color is applied.  Bars outside all windows use
+    ``default_color``.
+
+    :param series: The series to attach to.
+    :param default_color: Background color for bars that fall outside all sessions.
+        Use ``'rgba(0,0,0,0)'`` for transparent (no highlight).
     """
 
-    def __init__(self, chart, session_color: str = 'rgba(41, 98, 255, 0.08)'):
-        super().__init__(chart.win)
-        self._chart = chart
+    def __init__(self, series, default_color: str = 'rgba(0,0,0,0)'):
+        super().__init__(series._chart.win)
+        self._series = series
+        sessions_var = self.id + 'S'
+        self._sessions_var = sessions_var
         self.run_script(f'''
-            {self.id} = new Lib.Plugins.SessionHighlighting({{
-                sessionColor: '{session_color}',
+            {sessions_var} = [];
+            {self.id} = new Lib.SessionHighlighting(function(time) {{
+                var ts = typeof time === 'number' ? time * 1000 : new Date(time).getTime();
+                for (var i = 0; i < {sessions_var}.length; i++) {{
+                    var s = {sessions_var}[i];
+                    if (ts >= s.start && ts <= s.end) return s.color;
+                }}
+                return '{default_color}';
             }});
-            {chart.id}.series.attachPrimitive({self.id});
+            {series.id}.series.attachPrimitive({self.id});
         null''')
 
-    def set_data(self, sessions: List[dict]):
+    def set_sessions(self, sessions: List[dict]):
         """
-        Sets the session ranges to highlight.
+        Sets the time ranges to highlight.
 
-        :param sessions: A list of dicts with keys ``start`` and ``end``
-            (Unix timestamps in seconds), and an optional ``color`` key.
-            Example::
+        :param sessions: List of dicts with ``start`` and ``end`` as Unix timestamps
+            (seconds) and an optional ``color`` (CSS color string).  Example::
 
                 [
-                    {'start': 1700000000, 'end': 1700003600},
-                    {'start': 1700007200, 'end': 1700010800, 'color': 'rgba(255,0,0,0.1)'},
+                    {'start': 1704099600, 'end': 1704110400},
+                    {'start': 1704103200, 'end': 1704106800, 'color': 'rgba(255,0,0,0.1)'},
                 ]
         """
-        self.run_script(f'{self.id}.setData({json.dumps(sessions)})')
+        js_sessions = json.dumps([
+            {
+                'start': s['start'] * 1000,
+                'end':   s['end']   * 1000,
+                'color': s.get('color', 'rgba(41, 98, 255, 0.08)'),
+            }
+            for s in sessions
+        ])
+        self.run_script(f'''
+            {self._sessions_var} = {js_sessions};
+            {self.id}.dataUpdated('full');
+        null''')
 
-    def apply_options(self, session_color: Optional[str] = None):
-        """Updates the default session color."""
-        opts = {}
-        if session_color is not None:
-            opts['sessionColor'] = session_color
-        if opts:
-            self.run_script(f'{self.id}.applyOptions({json.dumps(opts)})')
+    def delete(self):
+        """Detaches and removes the session highlighting from the series."""
+        self.run_script(f'{self._series.id}.series.detachPrimitive({self.id})')

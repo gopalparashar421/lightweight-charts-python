@@ -1,63 +1,50 @@
-from typing import Optional
+import json
+from typing import Union, List
 import pandas as pd
 
-from ..util import Pane, js_data
+from ..util import Pane
 
 
 class VolumeProfile(Pane):
     """
-    Displays a volume profile (price-level histogram) overlaid on the chart.
-    Uses Lib.Plugins.VolumeProfile from plugins.js.
+    Renders a volume-profile histogram at a specific time position on a series.
 
-    The plugin is attached to the main candlestick series. Volume bars are drawn
-    on the right side of the chart with configurable width.
+    The profile is a vertical bar chart of price levels vs. volume, anchored at
+    ``time`` and spanning ``width`` bars to the right.
 
-    :param chart: The parent chart instance.
-    :param up_color: Color for bars where close >= open.
-    :param down_color: Color for bars where close < open.
-    :param width_factor: Fraction (0–1) of chart width used for the profile (default 0.4).
+    :param series: The series to attach to (also provides the chart reference).
+    :param time: Anchor timestamp for the profile (Unix seconds, datetime, or string).
+    :param profile: Price-level volume data — either a list of
+        ``{'price': float, 'vol': float}`` dicts or a DataFrame with
+        ``price`` and ``vol`` columns.
+    :param width: Width of the profile in bar units (default 10).
     """
 
     def __init__(
         self,
-        chart,
-        up_color: str = 'rgba(38,166,154,0.5)',
-        down_color: str = 'rgba(239,83,80,0.5)',
-        width_factor: float = 0.4,
+        series,
+        time,
+        profile: Union[List[dict], pd.DataFrame],
+        width: int = 10,
     ):
-        super().__init__(chart.win)
-        self._chart = chart
+        super().__init__(series._chart.win)
+        self._series = series
+        ts = series._chart._single_datetime_format(time)
+        profile_list = (
+            profile[['price', 'vol']].to_dict('records')
+            if isinstance(profile, pd.DataFrame)
+            else profile
+        )
+        vp_data = {'time': ts, 'profile': profile_list, 'width': width}
         self.run_script(f'''
-            {self.id} = new Lib.Plugins.VolumeProfile({{
-                upColor: '{up_color}',
-                downColor: '{down_color}',
-                widthFactor: {width_factor},
-            }});
-            {chart.id}.series.attachPrimitive({self.id});
+            {self.id} = new Lib.VolumeProfile(
+                {series._chart.id}.chart,
+                {series.id}.series,
+                {json.dumps(vp_data)}
+            );
+            {series.id}.series.attachPrimitive({self.id});
         null''')
 
-    def set_data(self, df: pd.DataFrame):
-        """
-        Feeds OHLCV data to the volume profile.
-
-        :param df: DataFrame with columns: time, open, high, low, close, volume.
-        """
-        self.run_script(f'{self.id}.setData({js_data(df)})')
-
-    def apply_options(
-        self,
-        up_color: Optional[str] = None,
-        down_color: Optional[str] = None,
-        width_factor: Optional[float] = None,
-    ):
-        """Updates volume profile display options."""
-        opts = {}
-        if up_color is not None:
-            opts['upColor'] = up_color
-        if down_color is not None:
-            opts['downColor'] = down_color
-        if width_factor is not None:
-            opts['widthFactor'] = width_factor
-        if opts:
-            import json
-            self.run_script(f'{self.id}.applyOptions({json.dumps(opts)})')
+    def delete(self):
+        """Detaches and removes the volume profile from the series."""
+        self.run_script(f'{self._series.id}.series.detachPrimitive({self.id})')
