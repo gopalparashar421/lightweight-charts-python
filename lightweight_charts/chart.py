@@ -94,7 +94,7 @@ class PyWV:
                             # print(f"Js: {str(arg)}")
                             print(f"JavaScript Error 1: {e}")  # Debugging output
                 except KeyError as e:
-                    return
+                    return e
                 except JavascriptException as e:
                     msg = json.loads(str(e))
                     print(msg)

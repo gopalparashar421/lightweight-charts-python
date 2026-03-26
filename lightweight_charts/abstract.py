@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from base64 import b64decode
@@ -1084,51 +1083,6 @@ class AbstractChart(Candlestick, Pane):
             pane_index,
             price_scale_id,
         )
-
-    def create_area(
-        self,
-        name: str = "",
-        top_color: str = "rgba(33,150,243,0.4)",
-        bottom_color: str = "rgba(33,150,243,0)",
-        line_color: str = "#2196F3",
-        line_width: int = 2,
-        price_line: bool = True,
-        price_label: bool = True,
-        price_scale_id: Optional[str] = None,
-        crosshair_marker: bool = True,
-        last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
-        pane_index: int = None,
-    ) -> "Area":
-        """
-        Creates and returns an Area series object.
-        """
-        area = Area(
-            self,
-            name,
-            top_color,
-            bottom_color,
-            line_color,
-            line_width,
-            price_line,
-            price_label,
-            price_scale_id,
-            crosshair_marker,
-            last_price_animation,
-            pane_index,
-        )
-        self._lines.append(area)
-        return area
-
-    def create_up_down_markers(
-        self,
-        series: "SeriesCommon",
-        up_color: str = "#26a69a",
-        down_color: str = "#ef5350",
-    ) -> "UpDownMarkers":
-        """
-        Attaches an UpDownMarkers primitive to the given series.
-        """
-        return UpDownMarkers(self, series, up_color, down_color)
 
     def lines(self) -> List[Line]:
         """
