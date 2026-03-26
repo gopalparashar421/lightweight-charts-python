@@ -13,16 +13,17 @@ low = np.minimum(open_, close) - np.abs(np.random.randn(n) * 0.3)
 volume = np.random.randint(100_000, 500_000, n).astype(float)
 df = pd.DataFrame({'time': dates, 'open': open_, 'high': high, 'low': low, 'close': close, 'volume': volume})
 
-chart = Chart()
-chart.set(df)
+if __name__ == '__main__':
+    chart = Chart()
+    chart.set(df)
 
-# Attach tooltip to the main candlestick series
-tooltip = Tooltip(
-    chart,
-    line_color='rgba(0, 0, 0, 0.2)',
-    follow_mode='top',
-    title='OHLCV',
-)
+    # Attach tooltip to the main candlestick series
+    tooltip = Tooltip(
+        chart,
+        line_color='rgba(0, 0, 0, 0.2)',
+        follow_mode='tracking',
+        title='OHLCV',
+    )
 
-chart.fit()
-chart.show(block=True)
+    chart.fit()
+    chart.show(block=True)
