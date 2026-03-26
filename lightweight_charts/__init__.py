@@ -9,3 +9,21 @@ from .plugins import (
     VolumeProfile,
     HeatmapSeries,
 )
+
+__all__ = [
+    'AbstractChart',
+    'Window',
+    'Line',
+    'Area',
+    'Histogram',
+    'AttachedPrimitive',
+    'UpDownMarkers',
+    'Chart',
+    'JupyterChart',
+    'PolygonChart',
+    'SessionHighlighting',
+    'Tooltip',
+    'BandsIndicator',
+    'VolumeProfile',
+    'HeatmapSeries',
+]

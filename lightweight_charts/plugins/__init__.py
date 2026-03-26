@@ -7,7 +7,7 @@ from .heatmap import HeatmapSeries
 __all__ = [
     'SessionHighlighting',
     'Tooltip',
+    'HeatmapSeries',
     'BandsIndicator',
     'VolumeProfile',
-    'HeatmapSeries',
 ]
