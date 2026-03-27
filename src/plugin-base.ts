@@ -48,9 +48,9 @@ export abstract class PluginBase implements ISeriesPrimitive<Time> {
 		return ensureDefined(this._series);
 	}
 
-	private _fireDataUpdated(scope: DataChangedScope) {
+	private _fireDataUpdated = (scope: DataChangedScope) => {
 		if (this.dataUpdated) {
 			this.dataUpdated(scope);
 		}
-	}
+	};
 }
