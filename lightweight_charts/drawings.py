@@ -1,12 +1,9 @@
 import asyncio
-import json
 import pandas as pd
 
 from typing import Union, Optional
 
-from lightweight_charts.util import js_json
-
-from .util import NUM, Pane, as_enum, LINE_STYLE, TIME, snake_to_camel
+from .util import NUM, Pane, as_enum, LINE_STYLE, TIME
 
 def make_js_point(chart, time, price):
     formatted_time = chart._single_datetime_format(time)
