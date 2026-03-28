@@ -2,6 +2,7 @@ import {
   ColorType,
   CrosshairMode,
   DeepPartial,
+  AreaStyleOptions,
   HistogramStyleOptions,
   IChartApi,
   ISeriesApi,
@@ -14,6 +15,7 @@ import {
   SeriesType,
   Time,
   createChart,
+  AreaSeries,
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
@@ -230,6 +232,20 @@ export class Handler {
     return {
       name: name,
       series: line,
+    };
+  }
+
+  createAreaSeries(
+    name: string,
+    options: DeepPartial<AreaStyleOptions & SeriesOptionsCommon>,
+    paneIndex?: number
+  ) {
+    const area = this.chart.addSeries(AreaSeries, { ...options }, paneIndex);
+    this._seriesList.push(area);
+    this.legend.makeSeriesRow(name, area);
+    return {
+      name: name,
+      series: area,
     };
   }
 
