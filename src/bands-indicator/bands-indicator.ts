@@ -1,21 +1,19 @@
 import { CanvasRenderingTarget2D } from 'fancy-canvas';
 import {
 	AutoscaleInfo,
-	BarData,
 	Coordinate,
 	DataChangedScope,
+	ISeriesApi,
 	ISeriesPrimitive,
 	IPrimitivePaneRenderer,
 	IPrimitivePaneView,
 	LineData,
 	Logical,
 	SeriesAttachedParameter,
-	SeriesDataItemTypeMap,
-	SeriesType,
+	SeriesOptionsMap,
 	Time,
 } from 'lightweight-charts';
 import { PluginBase } from '../plugin-base';
-import { cloneReadonly } from '../helpers/simple-clone';
 import { ClosestTimeIndexFinder } from '../helpers/closest-index';
 import { UpperLowerInRange } from '../helpers/min-max-in-range';
 
@@ -104,14 +102,6 @@ interface BandData {
 	lower: number;
 }
 
-function extractPrice(
-	dataPoint: SeriesDataItemTypeMap[SeriesType]
-): number | undefined {
-	if ((dataPoint as BarData).close) return (dataPoint as BarData).close;
-	if ((dataPoint as LineData).value) return (dataPoint as LineData).value;
-	return undefined;
-}
-
 export interface BandsIndicatorOptions {
 	lineColor?: string;
 	fillColor?: string;
@@ -121,19 +111,27 @@ export interface BandsIndicatorOptions {
 const defaults: Required<BandsIndicatorOptions> = {
 	lineColor: 'rgb(25, 200, 100)',
 	fillColor: 'rgba(25, 200, 100, 0.25)',
-	lineWidth: 1,
+	lineWidth: 0,
 };
 
 export class BandsIndicator extends PluginBase implements ISeriesPrimitive<Time> {
 	_paneViews: BandsIndicatorPaneView[];
-	_seriesData: SeriesDataItemTypeMap[SeriesType][] = [];
 	_bandsData: BandData[] = [];
 	_options: Required<BandsIndicatorOptions>;
 	_timeIndices: ClosestTimeIndexFinder<{ time: number }>;
 	_upperLower: UpperLowerInRange<BandData>;
 
-	constructor(options: BandsIndicatorOptions = {}) {
+	private _upperSeries: ISeriesApi<keyof SeriesOptionsMap>;
+	private _lowerSeries: ISeriesApi<keyof SeriesOptionsMap>;
+
+	constructor(
+		upperSeries: ISeriesApi<keyof SeriesOptionsMap>,
+		lowerSeries: ISeriesApi<keyof SeriesOptionsMap>,
+		options: BandsIndicatorOptions = {}
+	) {
 		super();
+		this._upperSeries = upperSeries;
+		this._lowerSeries = lowerSeries;
 		this._options = { ...defaults, ...options };
 		this._paneViews = [new BandsIndicatorPaneView(this)];
 		this._timeIndices = new ClosestTimeIndexFinder([]);
@@ -150,42 +148,48 @@ export class BandsIndicator extends PluginBase implements ISeriesPrimitive<Time>
 
 	attached(p: SeriesAttachedParameter<Time>): void {
 		super.attached(p);
+		this._lowerSeries.subscribeDataChanged(this._onLowerDataChanged);
 		this.dataUpdated('full');
 	}
 
+	detached(): void {
+		this._lowerSeries.unsubscribeDataChanged(this._onLowerDataChanged);
+		super.detached();
+	}
+
+	private _onLowerDataChanged = (scope: DataChangedScope) => {
+		this.dataUpdated(scope);
+		this.requestUpdate();
+	};
+
 	dataUpdated(scope: DataChangedScope) {
-		// plugin base has fired a data changed event
-		this._seriesData = cloneReadonly(this.series.data());
 		this.calculateBands();
 		if (scope === 'full') {
 			this._timeIndices = new ClosestTimeIndexFinder(
-				this._seriesData as { time: number }[]
+				this._bandsData as unknown as { time: number }[]
 			);
 		}
 	}
 
-	_minValue: number = Number.POSITIVE_INFINITY;
-	_maxValue: number = Number.NEGATIVE_INFINITY;
 	calculateBands() {
-		const bandData: BandData[] = new Array(this._seriesData.length);
-		let index = 0;
-		this._minValue = Number.POSITIVE_INFINITY;
-		this._maxValue = Number.NEGATIVE_INFINITY;
-		this._seriesData.forEach(d => {
-			const price = extractPrice(d);
-			if (price === undefined) return;
-			const upper = price * 1.1;
-			const lower = price * 0.9;
-			if (upper > this._maxValue) this._maxValue = upper;
-			if (lower < this._minValue) this._minValue = lower;
-			bandData[index] = {
-				upper,
-				lower,
-				time: d.time,
-			};
-			index += 1;
-		});
-		bandData.length = index;
+		const upperData = this._upperSeries.data();
+		const lowerData = this._lowerSeries.data();
+
+		const lowerMap = new Map<Time, number>();
+		for (const d of lowerData) {
+			const val = (d as LineData).value;
+			if (val !== undefined) lowerMap.set(d.time, val);
+		}
+
+		const bandData: BandData[] = [];
+		for (const d of upperData) {
+			const upper = (d as LineData).value;
+			if (upper === undefined) continue;
+			const lower = lowerMap.get(d.time);
+			if (lower === undefined) continue;
+			bandData.push({ time: d.time, upper, lower });
+		}
+
 		this._bandsData = bandData;
 		this._upperLower = new UpperLowerInRange(this._bandsData, 4);
 	}
