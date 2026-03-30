@@ -180,7 +180,10 @@ class SeriesCommon(Pane):
 
     def _set_interval(self, df: pd.DataFrame):
         if not pd.api.types.is_datetime64_any_dtype(df["time"]):
-            df["time"] = pd.to_datetime(df["time"])
+            if pd.api.types.is_numeric_dtype(df["time"]):
+                df["time"] = pd.to_datetime(df["time"], unit="s")
+            else:
+                df["time"] = pd.to_datetime(df["time"])
         common_interval = df["time"].diff().value_counts()
         if common_interval.empty:
             return
@@ -226,7 +229,10 @@ class SeriesCommon(Pane):
         df.columns = self._format_labels(df, df.columns, df.index, exclude_lowercase)
         self._set_interval(df)
         if not pd.api.types.is_datetime64_any_dtype(df["time"]):
-            df["time"] = pd.to_datetime(df["time"])
+            if pd.api.types.is_numeric_dtype(df["time"]):
+                df["time"] = pd.to_datetime(df["time"], unit="s")
+            else:
+                df["time"] = pd.to_datetime(df["time"])
         df["time"] = df["time"].astype("datetime64[s]").astype("int64")
         return df
 
@@ -243,7 +249,7 @@ class SeriesCommon(Pane):
             arg, (str, int, float)
         ) or not pd.api.types.is_datetime64_any_dtype(arg):
             try:
-                arg = pd.to_datetime(arg, unit="ms")
+                arg = pd.to_datetime(arg, unit="s")
             except ValueError:
                 arg = pd.to_datetime(arg)
         arg = self._interval * (arg.timestamp() // self._interval) + self.offset
