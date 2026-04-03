@@ -270,7 +270,7 @@ class SeriesCommon(Pane):
         self._last_bar = df.iloc[-1]
         self.run_script(f"{self.id}.series.setData({js_data(df)}); ")
 
-    def update(self, series: pd.Series):
+    def update(self, series: pd.Series, historicalUpdate: bool = False):
         series = self._series_datetime_format(series, exclude_lowercase=self.name)
         if self.name in series.index:
             series.rename({self.name: "value"}, inplace=True)
@@ -278,7 +278,7 @@ class SeriesCommon(Pane):
             self.data.loc[self.data.index[-1]] = self._last_bar
             self.data = pd.concat([self.data, series.to_frame().T], ignore_index=True)
         self._last_bar = series
-        self.run_script(f"{self.id}.series.update({js_data(series)})")
+        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historicalUpdate)});")
 
     def _update_markers(self):
         self.run_script(f'{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})')
