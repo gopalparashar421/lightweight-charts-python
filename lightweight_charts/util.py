@@ -32,6 +32,8 @@ class IDGen(list):
 def parse_event_message(window, string):
     name, args = string.split('_~_')
     args = args.split(';;;')
+    if name == "null":
+        return None, args
     func = window.handlers[name]
     return func, args
 
@@ -42,7 +44,7 @@ def js_data(data: Union[pd.DataFrame, pd.Series]):
         filtered_records = [{k: v for k, v in record.items() if v is not None and not pd.isna(v)} for record in d]
     else:
         d = data.to_dict()
-        filtered_records = {k: v for k, v in d.items()}
+        filtered_records = {k: v for k, v in d.items() if v is not None and not pd.isna(v)}
     return json.dumps(filtered_records, indent=2)
 
 

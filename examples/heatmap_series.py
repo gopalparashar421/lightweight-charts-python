@@ -6,7 +6,7 @@ from lightweight_charts.plugins import HeatmapSeries
 np.random.seed(21)
 n_time = 60
 n_levels = 20
-dates = pd.date_range('2024-01-01', periods=n_time, freq='1H')
+dates = pd.date_range('2024-01-01', periods=n_time, freq='1h')
 
 # Each row is one price cell: same time may appear multiple times (one row per level)
 rows = []
@@ -20,9 +20,13 @@ for ts in dates:
 
 heatmap_df = pd.DataFrame(rows)
 
-chart = Chart()
-heatmap = HeatmapSeries(chart, pane_index=0)
-heatmap.set(heatmap_df)
+if __name__ == '__main__':
+    chart = Chart()
+    heatmap = HeatmapSeries(chart, pane_index=0)
+    heatmap.set(heatmap_df)
 
-chart.fit()
-chart.show(block=True)
+    chart.fit()
+    chart.show(block=True)
+
+
+## Add Example 2
