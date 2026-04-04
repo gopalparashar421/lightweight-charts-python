@@ -1,9 +1,9 @@
 import asyncio
 import json
+import inspect
 from datetime import datetime
 from random import choices
 from typing import Literal, Union
-from numpy import isin
 import pandas as pd
 
 
@@ -117,7 +117,7 @@ class Emitter:
 
     def _emit(self, *args):
         if self._callable:
-            if asyncio.iscoroutinefunction(self._callable):
+            if inspect.iscoroutinefunction(self._callable):
                 asyncio.create_task(self._callable(*args))
             else:
                 self._callable(*args)
@@ -136,7 +136,7 @@ class JSEmitter:
         async def final_async_wrapper(*arg):
             await other(self._chart, *arg) if not self._wrapper else await self._wrapper(other, self._chart, *arg)
 
-        self._chart.win.handlers[self._name] = final_async_wrapper if asyncio.iscoroutinefunction(other) else final_wrapper
+        self._chart.win.handlers[self._name] = final_async_wrapper if inspect.iscoroutinefunction(other) else final_wrapper
         self._on_iadd(other)
         return self
 

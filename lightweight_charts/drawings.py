@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 import pandas as pd
 
 from typing import Union, Optional
@@ -101,7 +101,7 @@ class HorizontalLine(Drawing):
             self.price = float(p)
             await func(chart, self)
 
-        self.win.handlers[self.id] = wrapper_async if asyncio.iscoroutinefunction(func) else wrapper
+        self.win.handlers[self.id] = wrapper_async if inspect.iscoroutinefunction(func) else wrapper
         self.run_script(f'{chart.id}.toolBox?.addNewDrawing({self.id})')
 
     def update(self, price: float):

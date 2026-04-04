@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import html
 import os
 
@@ -56,7 +57,7 @@ except ImportError:
 
 def emit_callback(window, string):
     func, args = parse_event_message(window, string)
-    asyncio.create_task(func(*args)) if asyncio.iscoroutinefunction(func) else func(*args)
+    asyncio.create_task(func(*args)) if inspect.iscoroutinefunction(func) else func(*args)
 
 
 class WxChart(abstract.AbstractChart):
@@ -135,7 +136,6 @@ class StaticLWC(abstract.AbstractChart):
                 .replace('<link rel="stylesheet" href="styles.css">', f"<style>{css}</style>") \
                 .replace(' src="./lightweight-charts.standalone.development.js">', f'>{lwc}') \
                 .replace(' src="./bundle.js">', f'>{js}') \
-                .replace(' src="./plugins.js">', f'>{plugins_js}') \
                 .replace('</body>\n</html>', '<script>')
 
         super().__init__(abstract.Window(run_script=self.run_script), inner_width, inner_height,

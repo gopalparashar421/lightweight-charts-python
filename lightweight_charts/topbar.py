@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 from typing import Dict, Literal
 
 from .util import jbool, Pane
@@ -23,7 +23,7 @@ class Widget(Pane):
             self.value = v
             await func(topbar._chart)
 
-        self.win.handlers[self.id] = async_wrapper if asyncio.iscoroutinefunction(func) else wrapper
+        self.win.handlers[self.id] = async_wrapper if inspect.iscoroutinefunction(func) else wrapper
 
 
 class TextWidget(Widget):

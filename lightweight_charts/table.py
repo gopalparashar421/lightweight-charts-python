@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 import random
 from typing import Union, Optional, Callable
 
@@ -93,7 +93,7 @@ class Table(Pane, dict):
             else:
                 await func(self[rId])
 
-        self.win.handlers[self.id] = async_wrapper if asyncio.iscoroutinefunction(func) else wrapper
+        self.win.handlers[self.id] = async_wrapper if inspect.iscoroutinefunction(func) else wrapper
         self.return_clicked_cells = return_clicked_cells
 
         self.run_script(f'''

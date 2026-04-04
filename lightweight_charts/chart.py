@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import multiprocessing as mp
 import typing
@@ -248,7 +249,7 @@ class Chart(abstract.AbstractChart):
                     func, args = parse_event_message(self.win, response)
                     (
                         await func(*args)
-                        if asyncio.iscoroutinefunction(func)
+                        if inspect.iscoroutinefunction(func)
                         else func(*args)
                     )
         except KeyboardInterrupt:
