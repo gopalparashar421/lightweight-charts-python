@@ -72,6 +72,33 @@ class HeatmapSeries(Pane):
             records.append({'time': int(t), 'cells': cells})
         self.run_script(f'{self.id}.setData({json.dumps(records)})')
 
+    def set_orderbook(
+        self,
+        time,
+        bids: List[tuple],
+        asks: List[tuple],
+    ):
+        """
+        Convenience helper that converts a raw orderbook snapshot into heatmap
+        cells and appends/updates the bar at *time*.
+
+        :param time: The bar's timestamp (Unix seconds, datetime, or string).
+        :param bids: List of ``(price, size)`` tuples for the bid side.
+        :param asks: List of ``(price, size)`` tuples for the ask side.
+
+        Each ``(price, size)`` pair is treated as a single-tick price level,
+        so ``low = price`` and ``high = price + 1`` (one currency unit wide).
+        ``amount`` is the number of contracts at that level.
+        """
+        cells = []
+        for price, size in bids:
+            p = float(price)
+            cells.append({'low': p, 'high': p + 1.0, 'amount': float(size)})
+        for price, size in asks:
+            p = float(price)
+            cells.append({'low': p, 'high': p + 1.0, 'amount': float(size)})
+        self.update(time, cells)
+
     def update(self, time, cells: List[dict]):
         """
         Appends or updates a single bar.

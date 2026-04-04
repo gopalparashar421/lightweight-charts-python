@@ -1,12 +1,18 @@
 """
 Heatmap Series – Example 2: Orderbook Visualisation
 =====================================================
-Replicates the TypeScript bell-curve heatmap example using Python data
-generation.  Each bar's heatmap cells are drawn from a bell curve centred on
-the mid-price, simulating a depth-of-book (orderbook) heat map alongside a
-price line.
+Demonstrates two ways to feed orderbook data into a HeatmapSeries:
 
-Generation parameters match the original TS example:
+  1. Bulk load via ``heatmap.set(df)`` – the historical approach used by the
+     bell-curve simulation below.
+  2. Per-snapshot load via ``heatmap.set_orderbook(time, bids, asks)`` – the
+     convenient helper designed for real exchange feeds where the exchange
+     delivers data as::
+
+         bids: list[tuple[str, int]]   # [("price", size), ...]
+         asks: list[tuple[str, int]]
+
+Generation parameters (bell-curve simulation):
   • 250 daily bars starting 2018-01-01
   • spread = 20 (price levels), binSize = 5
   • 10 000 Monte-Carlo samples per bar to build the histogram
@@ -81,7 +87,22 @@ cell_shader_js = f"""(amount) => {{
     return `rgba(${{r}}, ${{g}}, ${{b}}, ${{(0.05 + amt * 0.010).toFixed(3)}})`;
 }}"""
 
-# ── 5. Build chart ────────────────────────────────────────────────────────────
+# ── 5. Simulate an exchange orderbook snapshot (the set_orderbook API) ────────
+# In a real application these would come from a websocket feed, e.g.:
+#   bids, asks = exchange.get_orderbook("BTC-USD")
+# The format is exactly what most REST/WS APIs return:
+#   bids / asks : list[tuple[str, int]]  →  [("price", size), ...]
+last_price = prices[-1]
+example_bids: list[tuple[str, int]] = [
+    (str(int(last_price - i)), np.random.randint(50, 500))
+    for i in range(1, 11)
+]
+example_asks: list[tuple[str, int]] = [
+    (str(int(last_price + i)), np.random.randint(50, 500))
+    for i in range(1, 11)
+]
+
+# ── 6. Build chart ────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     chart = Chart()
 
@@ -92,7 +113,15 @@ if __name__ == '__main__':
         cell_border_width=0,
         pane_index=0,
     )
+
+    # Historical bars loaded in bulk via set()
     heatmap.set(heatmap_df)
+
+    # Append the latest orderbook snapshot using the exchange-feed helper.
+    # set_orderbook() accepts bids/asks as list[tuple[str, int]] and converts
+    # each price level to a heatmap cell (low=price, high=price+1, amount=size).
+    last_date = dates[-1]
+    heatmap.set_orderbook(last_date, bids=example_bids, asks=example_asks)
 
     # Price line on top of the heatmap
     line = chart.create_line(name='Price', color='black', width=1, pane_index=0)
