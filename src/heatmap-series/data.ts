@@ -7,6 +7,10 @@ export interface HeatmapCell {
 	high: number;
 	// Amount for the cell
 	amount: number;
+	// Optional explicit CSS color; overrides all shaders when provided
+	color?: string;
+	// Optional side identifier ('bid' | 'ask'); selects bidShader / askShader
+	side?: string;
 }
 
 /**

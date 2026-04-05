@@ -9,6 +9,8 @@ export interface HeatMapSeriesOptions extends CustomSeriesOptions {
 	lastValueVisible: false;
 	priceLineVisible: false;
 	cellShader: HeatMapCellShader;
+	bidShader?: HeatMapCellShader;
+	askShader?: HeatMapCellShader;
 	cellBorderWidth: number;
 	cellBorderColor: string;
 }

@@ -17,6 +17,8 @@ interface HeatMapBarItemCell {
 	low: number;
 	high: number;
 	amount: number;
+	color?: string;
+	side?: string;
 }
 
 interface HeatMapBarItem {
@@ -66,6 +68,8 @@ export class HeatMapSeriesRenderer<TData extends HeatMapData>
 				cells: bar.originalData.cells.map(cell => {
 					return {
 						amount: cell.amount,
+						color: cell.color,
+						side: cell.side,
 						low:
 							priceToCoordinate(cell.low)!,
 						high:
@@ -95,7 +99,11 @@ export class HeatMapSeriesRenderer<TData extends HeatMapData>
 					cell.high,
 					renderingScope.verticalPixelRatio
 				);
-				renderingScope.context.fillStyle = options.cellShader(cell.amount);
+				const shader =
+					cell.side === 'bid' && options.bidShader ? options.bidShader :
+					cell.side === 'ask' && options.askShader ? options.askShader :
+					options.cellShader;
+				renderingScope.context.fillStyle = cell.color ?? shader(cell.amount);
 				renderingScope.context.fillRect(
 					fullWidth.position + borderWidthHorizontal,
 					verticalDimension.position + borderWidthVertical,
