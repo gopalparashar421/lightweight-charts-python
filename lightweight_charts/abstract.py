@@ -1041,29 +1041,6 @@ class AbstractChart(Candlestick, Pane):
             pane_index=pane_index,
         )
 
-    def create_up_down_markers(
-        self,
-        series,
-        up_color: str = "#26a69a",
-        down_color: str = "#ef5350",
-    ) -> str:
-        """
-        Attaches UpDownMarkers to the given series and returns the primitive wrapper.
-        The *series* argument can be a :class:`Line`, :class:`Area`, or the chart itself
-        (for the main candlestick/line series).
-        """
-        series_js = f"{series.id}.series"
-        marker_id = Window._id_gen.generate()
-        self.run_script(
-            f"""
-            {marker_id} = LightweightCharts.createUpDownMarkers({series_js}, {{
-                positiveColor: '{up_color}',
-                negativeColor: '{down_color}',
-            }});
-        """
-        )
-        return marker_id
-
     def create_histogram(
         self,
         name: str = "",
