@@ -9,3 +9,4 @@ export * from './partial-price-line/partial-price-line';
 export * from './session-highlighting/session-highlighting';
 export * from './tooltip/tooltip';
 export * from './volume-profile/volume-profile';
+export * from './position-tool/position-tool';

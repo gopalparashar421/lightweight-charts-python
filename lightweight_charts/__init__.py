@@ -8,6 +8,7 @@ from .plugins import (
     BandsIndicator,
     VolumeProfile,
     HeatmapSeries,
+    PositionTool,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     'BandsIndicator',
     'VolumeProfile',
     'HeatmapSeries',
+    'PositionTool',
 ]

@@ -3,6 +3,7 @@ from .tooltip import Tooltip
 from .bands import BandsIndicator
 from .volume_profile import VolumeProfile
 from .heatmap import HeatmapSeries
+from .position_tool import PositionTool
 
 __all__ = [
     'SessionHighlighting',
@@ -10,4 +11,5 @@ __all__ = [
     'HeatmapSeries',
     'BandsIndicator',
     'VolumeProfile',
+    'PositionTool',
 ]
