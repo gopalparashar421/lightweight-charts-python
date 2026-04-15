@@ -613,6 +613,31 @@ class Area(SeriesCommon):
         null'''
         )
 
+    _AREA_COLOR_RENAME = {
+        'line_color': 'lineColor',
+        'top_color': 'topColor',
+        'bottom_color': 'bottomColor',
+    }
+
+    def set(self, df: Optional[pd.DataFrame] = None, format_cols: bool = True):
+        """
+        Sets the area series data. Accepts optional per-point color columns:
+        ``line_color`` / ``lineColor``, ``top_color`` / ``topColor``,
+        ``bottom_color`` / ``bottomColor``.
+        """
+        if df is not None and not df.empty:
+            df = df.rename(columns=self._AREA_COLOR_RENAME)
+        super().set(df, format_cols)
+
+    def update(self, series: pd.Series, historicalUpdate: bool = False):
+        """
+        Updates the area series. Accepts optional per-point color keys:
+        ``line_color`` / ``lineColor``, ``top_color`` / ``topColor``,
+        ``bottom_color`` / ``bottomColor``.
+        """
+        series = series.rename(self._AREA_COLOR_RENAME)
+        super().update(series, historicalUpdate)
+
     def delete(self):
         """
         Irreversibly deletes the area series.
