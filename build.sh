@@ -30,5 +30,13 @@ else
     echo -e "${ERROR}could not copy dist into python package ?"
     exit 1
 fi
+
+cp node_modules/lightweight-charts/dist/lightweight-charts.standalone.development.js lightweight_charts/js/
+if [[ $? -eq 0 ]]; then
+    echo -e "${INFO}copied lightweight-charts standalone file into python package"
+else
+    echo -e "${ERROR}could not copy lightweight-charts standalone file ?"
+    exit 1
+fi
 echo -e "\n${GREEN}[BUILD SUCCESS]${NC}"
 

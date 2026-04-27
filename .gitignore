@@ -16,3 +16,7 @@ pyrightconfig.json
 working/
 .zed/
 uv.lock
+/.github/agents
+/.github/reference
+/.github/skills
+/agent-output

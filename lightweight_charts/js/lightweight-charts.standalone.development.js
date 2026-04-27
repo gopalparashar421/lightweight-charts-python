@@ -1,7 +1,7 @@
 /*!
  * @license
- * TradingView Lightweight Charts™ v5.0.3
- * Copyright (c) 2025 TradingView, Inc.
+ * TradingView Lightweight Charts™ v5.2.0
+ * Copyright (c) 2026 TradingView, Inc.
  * Licensed under Apache License 2.0 https://www.apache.org/licenses/LICENSE-2.0
  */
 (function () {
@@ -13,6 +13,7 @@
     const seriesOptionsDefaults = {
         title: '',
         visible: true,
+        hitTestTolerance: 3,
         lastValueVisible: true,
         priceLineVisible: true,
         priceLineSource: 0 /* PriceLineSource.LastBar */,
@@ -74,16 +75,23 @@
          */
         LineStyle[LineStyle["SparseDotted"] = 4] = "SparseDotted";
     })(LineStyle || (LineStyle = {}));
+    function getDashPattern(style, lineWidth) {
+        switch (style) {
+            case 0 /* LineStyle.Solid */: return [];
+            case 1 /* LineStyle.Dotted */: return [lineWidth, lineWidth];
+            case 2 /* LineStyle.Dashed */: return [2 * lineWidth, 2 * lineWidth];
+            case 3 /* LineStyle.LargeDashed */: return [6 * lineWidth, 6 * lineWidth];
+            case 4 /* LineStyle.SparseDotted */: return [lineWidth, 4 * lineWidth];
+            default: return [];
+        }
+    }
+    function getDashPatternLength(dashPattern) {
+        return dashPattern.reduce((sum, val) => sum + val, 0);
+    }
     function setLineStyle(ctx, style) {
-        const dashPatterns = {
-            [0 /* LineStyle.Solid */]: [],
-            [1 /* LineStyle.Dotted */]: [ctx.lineWidth, ctx.lineWidth],
-            [2 /* LineStyle.Dashed */]: [2 * ctx.lineWidth, 2 * ctx.lineWidth],
-            [3 /* LineStyle.LargeDashed */]: [6 * ctx.lineWidth, 6 * ctx.lineWidth],
-            [4 /* LineStyle.SparseDotted */]: [ctx.lineWidth, 4 * ctx.lineWidth],
-        };
-        const dashPattern = dashPatterns[style];
+        const dashPattern = getDashPattern(style, ctx.lineWidth);
         ctx.setLineDash(dashPattern);
+        return dashPattern;
     }
     function drawHorizontalLine(ctx, y, left, right) {
         ctx.beginPath();
@@ -873,7 +881,7 @@
             const totalWidthBitmap = Math.round(totalWidth * horizontalPixelRatio);
             // tick overlaps scale border
             const tickSizeBitmap = Math.round(tickSize * horizontalPixelRatio);
-            const yMid = this._private__commonData._internal_fixedCoordinate ?? this._private__commonData._internal_coordinate;
+            const yMid = this._private__commonData._internal_fixedCoordinate ?? this._private__commonData._internal_renderCoordinate ?? this._private__commonData._internal_coordinate;
             const yMidBitmap = Math.round(yMid * verticalPixelRatio) - Math.floor(verticalPixelRatio * 0.5);
             const yTopBitmap = Math.floor(yMidBitmap + tickHeightBitmap / 2 - totalHeightBitmap / 2);
             const yBottomBitmap = yTopBitmap + totalHeightBitmap;
@@ -977,10 +985,13 @@
             return Math.max(this._private__axisRenderer._internal_height(rendererOptions, useSecondLine), this._private__paneRenderer._internal_height(rendererOptions, useSecondLine));
         }
         _internal_getFixedCoordinate() {
-            return this._private__commonRendererData._internal_fixedCoordinate || 0;
+            return this._private__commonRendererData._internal_fixedCoordinate ?? null;
         }
-        _internal_setFixedCoordinate(value) {
-            this._private__commonRendererData._internal_fixedCoordinate = value;
+        _internal_getRenderCoordinate() {
+            return this._private__commonRendererData._internal_fixedCoordinate ?? this._private__commonRendererData._internal_renderCoordinate ?? this._internal_coordinate();
+        }
+        _internal_setRenderCoordinate(value) {
+            this._private__commonRendererData._internal_renderCoordinate = value ?? undefined;
         }
         _internal_isVisible() {
             this._private__updateRendererDataIfNeeded();
@@ -1238,6 +1249,10 @@
          * This mode disables rendering of the crosshair.
          */
         CrosshairMode[CrosshairMode["Hidden"] = 2] = "Hidden";
+        /**
+         * This mode sticks crosshair's horizontal line to the price value of a single-value series or to the open/high/low/close price of OHLC-based series.
+         */
+        CrosshairMode[CrosshairMode["MagnetOHLC"] = 3] = "MagnetOHLC";
     })(CrosshairMode || (CrosshairMode = {}));
     class Crosshair extends DataSource {
         constructor(model, options) {
@@ -1245,7 +1260,7 @@
             this._private__pane = null;
             this._private__price = NaN;
             this._private__index = 0;
-            this._private__visible = true;
+            this._private__visible = false; // initially the crosshair should not be visible, until the user interacts.
             this._private__priceAxisViews = new Map();
             this._private__subscribed = false;
             this._private__crosshairPaneViewCache = new WeakMap();
@@ -1335,6 +1350,43 @@
             this._private__pane = null;
             this._internal_clearOriginCoord();
             this._internal_updateAllViews();
+        }
+        _internal_snapToVisibleSeriesIfNeeded(index) {
+            if (!this._private__options.doNotSnapToHiddenSeriesIndices) {
+                return index;
+            }
+            const model = this._private__model;
+            const timeScale = model._internal_timeScale();
+            let closestLeftIndex = null;
+            let closestRightIndex = null;
+            for (const series of model._internal_visibleSerieses()) {
+                const leftResult = series._internal_bars()._internal_search(index, -1 /* MismatchDirection.NearestLeft */);
+                if (leftResult) {
+                    if (leftResult._internal_index === index) {
+                        return index; // already snapped
+                    }
+                    if (closestLeftIndex === null || leftResult._internal_index > closestLeftIndex) {
+                        closestLeftIndex = leftResult._internal_index;
+                    }
+                }
+                const rightResult = series._internal_bars()._internal_search(index, 1 /* MismatchDirection.NearestRight */);
+                if (rightResult) {
+                    if (rightResult._internal_index === index) {
+                        return index; // already snapped
+                    }
+                    if (closestRightIndex === null || rightResult._internal_index < closestRightIndex) {
+                        closestRightIndex = rightResult._internal_index;
+                    }
+                }
+            }
+            const candidates = [closestLeftIndex, closestRightIndex].filter(notNull);
+            if (candidates.length === 0) {
+                return index;
+            }
+            const x = timeScale._internal_indexToCoordinate(index);
+            const distances = candidates.map((i) => Math.abs(x - timeScale._internal_indexToCoordinate(i)));
+            const minDistanceIndex = distances.indexOf(Math.min(...distances));
+            return candidates[minDistanceIndex];
         }
         _internal_paneViews(pane) {
             let crosshairPaneView = this._private__crosshairPaneViewCache.get(pane);
@@ -1549,10 +1601,14 @@
         }
     }
 
+    class FormatterBase {
+        formatTickmarks(prices) {
+            return prices.map((price) => this.format(price));
+        }
+    }
+
     const formatterOptions = {
-        _internal_decimalSign: '.',
-        _internal_decimalSignFractional: '\'',
-    };
+        _internal_decimalSign: '.'};
     /**
      * @param value - The number of convert.
      * @param length - The length. Must be between 0 and 16 inclusive.
@@ -1573,8 +1629,9 @@
         const dummyString = '0000000000000000';
         return (dummyString + value.toString()).slice(-length);
     }
-    class PriceFormatter {
+    class PriceFormatter extends FormatterBase {
         constructor(priceScale, minMove) {
+            super();
             if (!minMove) {
                 minMove = 1;
             }
@@ -1641,8 +1698,9 @@
         }
     }
 
-    class VolumeFormatter {
+    class VolumeFormatter extends FormatterBase {
         constructor(precision) {
+            super();
             this._private__precision = precision;
         }
         format(vol) {
@@ -1803,6 +1861,9 @@
             if (y >= itemY - lineWidth - 7 /* Constants.HitTestThreshold */ && y <= itemY + lineWidth + 7 /* Constants.HitTestThreshold */) {
                 return {
                     _internal_hitTestData: this._private__data,
+                    _internal_distance: Math.abs(y - itemY),
+                    _internal_priority: 2 /* HitTestPriority.Point */,
+                    _internal_itemType: 'price-line',
                     _internal_externalId: externalId,
                 };
             }
@@ -2262,6 +2323,25 @@
         }
     }
 
+    /**
+     * Power-of-2 conflation levels supported by the system.
+     * These represent the number of original data points that get merged into one conflated point.
+     */
+    const CONFLATION_LEVELS = [2, 4, 8, 16, 32, 64, 128, 256, 512];
+    /**
+     * Maximum conflation level supported.
+     */
+    const MAX_CONFLATION_LEVEL = 512;
+    /**
+     * Device pixel ratio threshold for conflation.
+     * Conflation happens when barSpacing is less than 1.0 / devicePixelRatio.
+     * This ensures we only conflate when we can't physically display the detail.
+     */
+    const DPR_CONFLATION_THRESHOLD = 1;
+    const CONFLATION_ERROR_MESSAGES = {
+        _internal_missingPriceValueBuilder: 'Custom series with conflation reducer must have a priceValueBuilder method',
+    };
+
     class CustomPriceLinePaneView extends SeriesHorizontalLinePaneView {
         constructor(series, priceLine) {
             super(series);
@@ -2371,6 +2451,344 @@
                 return null;
             }
             return priceScale._internal_priceToCoordinate(this._private__options.price, firstValue._internal_value);
+        }
+    }
+
+    class DataConflater {
+        constructor() {
+            this._private__dataCache = new WeakMap();
+        }
+        _internal_calculateConflationLevelWithSmoothing(barSpacing, devicePixelRatio, smoothingFactor) {
+            const conflationThreshold = (DPR_CONFLATION_THRESHOLD / devicePixelRatio) * smoothingFactor;
+            if (barSpacing >= conflationThreshold) {
+                return 1;
+            }
+            // calculate conflation level as power of 2
+            const ratio = conflationThreshold / barSpacing;
+            const conflationLevel = Math.pow(2, Math.floor(Math.log2(ratio)));
+            // ensure we don't exceed maximum conflation level
+            return Math.min(conflationLevel, MAX_CONFLATION_LEVEL);
+        }
+        _internal_conflateByFactor(data, barsToMerge, customReducer, isCustomSeries = false, priceValueBuilder) {
+            if (data.length === 0 || barsToMerge <= 1) {
+                return data;
+            }
+            const conflationLevel = this._private__normalizeConflationLevel(barsToMerge);
+            if (conflationLevel <= 1) {
+                return data;
+            }
+            const entry = this._private__getValidatedCacheEntry(data);
+            let cachedRows = entry._internal_levelResults.get(conflationLevel);
+            if (cachedRows !== undefined) {
+                return cachedRows;
+            }
+            cachedRows = this._private__buildRecursively(data, conflationLevel, customReducer, isCustomSeries, priceValueBuilder, entry._internal_levelResults);
+            entry._internal_levelResults.set(conflationLevel, cachedRows);
+            return cachedRows;
+        }
+        /**
+         * Efficiently update the last conflated chunk when new data arrives.
+         * This avoids rebuilding all chunks when just the last data point changes.
+         */
+        _internal_updateLastConflatedChunk(originalData, newLastRow, conflationLevel, customReducer, isCustomSeries = false, priceValueBuilder) {
+            if (conflationLevel < 1 || originalData.length === 0) {
+                return originalData;
+            }
+            const entry = this._private__getValidatedCacheEntry(originalData);
+            const cachedRows = entry._internal_levelResults.get(conflationLevel);
+            if (!cachedRows) {
+                return this._internal_conflateByFactor(originalData, conflationLevel, customReducer, isCustomSeries, priceValueBuilder);
+            }
+            const updatedRows = this._private__updateLastChunkInCache(originalData, newLastRow, conflationLevel, cachedRows, isCustomSeries, customReducer, priceValueBuilder);
+            entry._internal_levelResults.set(conflationLevel, updatedRows);
+            return updatedRows;
+        }
+        _private__normalizeConflationLevel(barsToMerge) {
+            if (barsToMerge <= 2) {
+                return 2;
+            }
+            for (const level of CONFLATION_LEVELS) {
+                if (barsToMerge <= level) {
+                    return level;
+                }
+            }
+            return MAX_CONFLATION_LEVEL;
+        }
+        _private__getDataVersion(data) {
+            if (data.length === 0) {
+                return 0;
+            }
+            // Simple hash based on data length and first/last items
+            const first = data[0];
+            const last = data[data.length - 1];
+            return data.length * 31 + first._internal_index * 17 + last._internal_index * 13;
+        }
+        /**
+         * Build conflation recursively, reusing previous level results.
+         */
+        _private__buildRecursively(data, targetLevel, customReducer, isCustomSeries = false, priceValueBuilder, levelResults = new Map()) {
+            if (targetLevel === 2) {
+                return this._private__buildLevelFromOriginal(data, 2, customReducer, isCustomSeries, priceValueBuilder);
+            }
+            const prevLevel = targetLevel / 2;
+            let prevData = levelResults.get(prevLevel);
+            if (!prevData) {
+                prevData = this._private__buildRecursively(data, prevLevel, customReducer, isCustomSeries, priceValueBuilder, levelResults);
+                levelResults.set(prevLevel, prevData);
+            }
+            return this._private__buildLevelFromPrevious(prevData, customReducer, isCustomSeries, priceValueBuilder);
+        }
+        /**
+         * Build a conflation level directly from original data (used for level 2).
+         */
+        _private__buildLevelFromOriginal(data, level, customReducer, isCustomSeries = false, priceValueBuilder) {
+            const chunks = this._private__buildChunksFromData(data, level, customReducer, isCustomSeries, priceValueBuilder);
+            return this._private__chunksToSeriesPlotRows(chunks, isCustomSeries);
+        }
+        /**
+         * Build a conflation level from the previous level's result.
+         */
+        _private__buildLevelFromPrevious(prevData, customReducer, isCustomSeries = false, priceValueBuilder) {
+            // Always merge 2 chunks from the previous level
+            const chunks = this._private__buildChunksFromData(prevData, 2, customReducer, isCustomSeries, priceValueBuilder);
+            return this._private__chunksToSeriesPlotRows(chunks, isCustomSeries);
+        }
+        _private__buildChunksFromData(data, mergeFactor, customReducer, isCustomSeries = false, priceValueBuilder) {
+            const chunks = [];
+            for (let i = 0; i < data.length; i += mergeFactor) {
+                const remaining = data.length - i;
+                if (remaining >= mergeFactor) {
+                    const merged = this._private__mergeTwoRows(data[i], data[i + 1], customReducer, isCustomSeries, priceValueBuilder);
+                    merged._internal_isRemainder = false;
+                    chunks.push(merged);
+                }
+                else {
+                    // remainder of 1 -> fold into previous chunk if possible
+                    if (chunks.length === 0) {
+                        chunks.push(this._private__plotRowToChunk(data[i], true));
+                    }
+                    else {
+                        const prev = chunks[chunks.length - 1];
+                        chunks[chunks.length - 1] = this._private__mergeChunkAndRow(prev, data[i], customReducer, isCustomSeries, priceValueBuilder);
+                    }
+                }
+            }
+            return chunks;
+        }
+        _private__sumCount(a, b) {
+            return (a ?? 1) + (b ?? 1);
+        }
+        _private__mergeTwoRows(a, b, customReducer, isCustomSeries = false, priceValueBuilder) {
+            if (!isCustomSeries || !customReducer || !priceValueBuilder) {
+                const high = a._internal_value[1 /* PlotRowValueIndex.High */] > b._internal_value[1 /* PlotRowValueIndex.High */] ? a._internal_value[1 /* PlotRowValueIndex.High */] : b._internal_value[1 /* PlotRowValueIndex.High */];
+                const low = a._internal_value[2 /* PlotRowValueIndex.Low */] < b._internal_value[2 /* PlotRowValueIndex.Low */] ? a._internal_value[2 /* PlotRowValueIndex.Low */] : b._internal_value[2 /* PlotRowValueIndex.Low */];
+                return {
+                    _internal_startIndex: a._internal_index,
+                    _internal_endIndex: b._internal_index,
+                    _internal_startTime: a._internal_time,
+                    _internal_endTime: b._internal_time,
+                    _internal_open: a._internal_value[0 /* PlotRowValueIndex.Open */],
+                    _internal_high: high,
+                    _internal_low: low,
+                    _internal_close: b._internal_value[3 /* PlotRowValueIndex.Close */],
+                    _internal_originalDataCount: this._private__sumCount(a._internal_originalDataCount, b._internal_originalDataCount),
+                    _internal_conflatedData: undefined,
+                    _internal_isRemainder: false,
+                };
+            }
+            const c1 = this._private__convertToContext(a, priceValueBuilder);
+            const c2 = this._private__convertToContext(b, priceValueBuilder);
+            const aggregated = customReducer(c1, c2);
+            const prices = priceValueBuilder(aggregated);
+            const p = prices.length ? prices[prices.length - 1] : 0;
+            return {
+                _internal_startIndex: a._internal_index,
+                _internal_endIndex: b._internal_index,
+                _internal_startTime: a._internal_time,
+                _internal_endTime: b._internal_time,
+                _internal_open: a._internal_value[0 /* PlotRowValueIndex.Open */],
+                _internal_high: Math.max(a._internal_value[1 /* PlotRowValueIndex.High */], p),
+                _internal_low: Math.min(a._internal_value[2 /* PlotRowValueIndex.Low */], p),
+                _internal_close: p,
+                _internal_originalDataCount: this._private__sumCount(a._internal_originalDataCount, b._internal_originalDataCount),
+                _internal_conflatedData: aggregated,
+                _internal_isRemainder: false,
+            };
+        }
+        _private__mergeChunkAndRow(chunk, row, customReducer, isCustomSeries = false, priceValueBuilder) {
+            if (!isCustomSeries || !customReducer || !priceValueBuilder) {
+                return {
+                    _internal_startIndex: chunk._internal_startIndex,
+                    _internal_endIndex: row._internal_index,
+                    _internal_startTime: chunk._internal_startTime,
+                    _internal_endTime: row._internal_time,
+                    _internal_open: chunk._internal_open,
+                    _internal_high: chunk._internal_high > row._internal_value[1 /* PlotRowValueIndex.High */] ? chunk._internal_high : row._internal_value[1 /* PlotRowValueIndex.High */],
+                    _internal_low: chunk._internal_low < row._internal_value[2 /* PlotRowValueIndex.Low */] ? chunk._internal_low : row._internal_value[2 /* PlotRowValueIndex.Low */],
+                    _internal_close: row._internal_value[3 /* PlotRowValueIndex.Close */],
+                    _internal_originalDataCount: chunk._internal_originalDataCount + (row._internal_originalDataCount ?? 1),
+                    _internal_conflatedData: chunk._internal_conflatedData,
+                    _internal_isRemainder: false,
+                };
+            }
+            const prevAgg = chunk._internal_conflatedData;
+            const ctx = this._private__convertToContext(row, priceValueBuilder);
+            // if prevAgg is missing (e.g single-item remainder chunk)
+            // treat the row as the first aggregate seed to avoid calling builder on undefined.
+            const prevCtx = prevAgg
+                ? {
+                    data: prevAgg,
+                    index: chunk._internal_startIndex,
+                    originalTime: chunk._internal_startTime,
+                    time: chunk._internal_startTime,
+                    priceValues: priceValueBuilder(prevAgg),
+                }
+                : null;
+            const aggregated = prevCtx ? customReducer(prevCtx, ctx) : (ctx.data);
+            const prices = prevCtx ? priceValueBuilder(aggregated) : ctx.priceValues;
+            const p = prices.length ? prices[prices.length - 1] : 0;
+            return {
+                _internal_startIndex: chunk._internal_startIndex,
+                _internal_endIndex: row._internal_index,
+                _internal_startTime: chunk._internal_startTime,
+                _internal_endTime: row._internal_time,
+                _internal_open: chunk._internal_open,
+                _internal_high: Math.max(chunk._internal_high, p),
+                _internal_low: Math.min(chunk._internal_low, p),
+                _internal_close: p,
+                _internal_originalDataCount: chunk._internal_originalDataCount + (row._internal_originalDataCount ?? 1),
+                _internal_conflatedData: aggregated,
+                _internal_isRemainder: false,
+            };
+        }
+        // fold [start, end) with override at overrideIndex
+        // eslint-disable-next-line max-params
+        _private__mergeRangeWithOverride(data, start, end, overrideIndex, overrideRow, customReducer, isCustomSeries = false, priceValueBuilder) {
+            const first = (start === overrideIndex) ? overrideRow : data[start];
+            if (end - start === 1) {
+                return this._private__plotRowToChunk(first, true);
+            }
+            const second = (start + 1 === overrideIndex) ? overrideRow : data[start + 1];
+            let chunk = this._private__mergeTwoRows(first, second, customReducer, isCustomSeries, priceValueBuilder);
+            for (let i = start + 2; i < end; i++) {
+                const row = (i === overrideIndex) ? overrideRow : data[i];
+                chunk = this._private__mergeChunkAndRow(chunk, row, customReducer, isCustomSeries, priceValueBuilder);
+            }
+            return chunk;
+        }
+        _private__convertToContext(item, priceValueBuilder) {
+            const itemData = item._internal_data ?? {};
+            return {
+                data: item._internal_data,
+                index: item._internal_index,
+                originalTime: item._internal_originalTime,
+                time: item._internal_time,
+                priceValues: priceValueBuilder(itemData),
+            };
+        }
+        _private__chunkToSeriesPlotRow(chunk, isCustomSeries = false) {
+            const isCustom = isCustomSeries === true;
+            const hasCustomData = !!chunk._internal_conflatedData;
+            const base = {
+                _internal_index: chunk._internal_startIndex,
+                _internal_time: chunk._internal_startTime,
+                _internal_originalTime: chunk._internal_startTime,
+                _internal_value: [
+                    isCustom ? chunk._internal_close : chunk._internal_open,
+                    chunk._internal_high,
+                    chunk._internal_low,
+                    chunk._internal_close,
+                ],
+                _internal_originalDataCount: chunk._internal_originalDataCount,
+            };
+            const data = isCustom
+                ? (hasCustomData ? chunk._internal_conflatedData : { _internal_time: chunk._internal_startTime })
+                : undefined;
+            return {
+                ...base,
+                _internal_data: data,
+            };
+        }
+        _private__chunksToSeriesPlotRows(chunks, isCustomSeries = false) {
+            return chunks.map((chunk) => this._private__chunkToSeriesPlotRow(chunk, isCustomSeries));
+        }
+        /**
+         * Update only the last chunk in cached conflated data efficiently.
+         */
+        // eslint-disable-next-line max-params
+        _private__updateLastChunkInCache(originalData, newLastRow, conflationLevel, cachedRows, isCustomSeries = false, customReducer, priceValueBuilder) {
+            if (cachedRows.length === 0) {
+                return cachedRows;
+            }
+            const lastOriginalIndex = originalData.length - 1;
+            const chunkStartIndex = Math.floor(lastOriginalIndex / conflationLevel) * conflationLevel;
+            const chunkEndIndex = Math.min(chunkStartIndex + conflationLevel, originalData.length);
+            if (chunkEndIndex - chunkStartIndex < conflationLevel && originalData.length > conflationLevel) {
+                // we must allocate a new array here to do a full rebuild.
+                const newOriginalData = originalData.slice();
+                newOriginalData[newOriginalData.length - 1] = newLastRow;
+                return this._internal_conflateByFactor(newOriginalData, conflationLevel, customReducer, isCustomSeries, priceValueBuilder);
+            }
+            const lastChunkIndex = Math.floor((lastOriginalIndex - 1) / conflationLevel);
+            const newChunkIndex = Math.floor(lastOriginalIndex / conflationLevel);
+            if (lastChunkIndex === newChunkIndex || cachedRows.length === 1) {
+                // Data length is within the same chunk OR it's the only chunk
+                const actualEndIndex = Math.min(chunkStartIndex + conflationLevel, originalData.length);
+                const count = actualEndIndex - chunkStartIndex;
+                if (count <= 0) {
+                    // This can happen if originalData.length was 0, though we guard at the top.
+                    return cachedRows;
+                }
+                const mergedChunk = count === 1
+                    ? this._private__plotRowToChunk((chunkStartIndex === lastOriginalIndex) ? newLastRow : originalData[chunkStartIndex], /* isRemainder*/ true)
+                    : this._private__mergeRangeWithOverride(originalData, chunkStartIndex, actualEndIndex, lastOriginalIndex, newLastRow, customReducer, isCustomSeries, priceValueBuilder);
+                // in-place update of the cached result: avoid allocating a new array
+                cachedRows[cachedRows.length - 1] = this._private__chunkToSeriesPlotRow(mergedChunk, isCustomSeries);
+                return cachedRows;
+            }
+            else {
+                // update affects chunk structure
+                // we must allocate a new array here to do a full rebuild.
+                const newOriginalData = originalData.slice();
+                newOriginalData[newOriginalData.length - 1] = newLastRow;
+                return this._internal_conflateByFactor(newOriginalData, conflationLevel, customReducer, isCustomSeries, priceValueBuilder);
+            }
+        }
+        _private__plotRowToChunk(item, isRemainder = false) {
+            const chunk = {
+                _internal_startIndex: item._internal_index,
+                _internal_endIndex: item._internal_index,
+                _internal_startTime: item._internal_time,
+                _internal_endTime: item._internal_time,
+                _internal_open: item._internal_value[0 /* PlotRowValueIndex.Open */],
+                _internal_high: item._internal_value[1 /* PlotRowValueIndex.High */],
+                _internal_low: item._internal_value[2 /* PlotRowValueIndex.Low */],
+                _internal_close: item._internal_value[3 /* PlotRowValueIndex.Close */],
+                _internal_originalDataCount: item._internal_originalDataCount ?? 1,
+                _internal_conflatedData: item._internal_data,
+                _internal_isRemainder: isRemainder,
+            };
+            return chunk;
+        }
+        _private__getValidatedCacheEntry(data) {
+            const entry = this._private__ensureCacheEntry(data);
+            const dataVersion = this._private__getDataVersion(data);
+            if (entry._internal_version !== dataVersion) {
+                entry._internal_levelResults.clear();
+                entry._internal_version = dataVersion;
+            }
+            return entry;
+        }
+        _private__ensureCacheEntry(data) {
+            let entry = this._private__dataCache.get(data);
+            if (entry === undefined) {
+                entry = {
+                    _internal_version: this._private__getDataVersion(data),
+                    _internal_levelResults: new Map(),
+                };
+                this._private__dataCache.set(data, entry);
+            }
+            return entry;
         }
     }
 
@@ -2722,15 +3140,19 @@
         return new PlotList();
     }
 
+    const drawingUtils = {
+        setLineStyle: setLineStyle,
+    };
+
     class PrimitiveRendererWrapper {
         constructor(baseRenderer) {
             this._private__baseRenderer = baseRenderer;
         }
         _internal_draw(target, isHovered, hitTestData) {
-            this._private__baseRenderer.draw(target);
+            this._private__baseRenderer.draw(target, drawingUtils);
         }
         _internal_drawBackground(target, isHovered, hitTestData) {
-            this._private__baseRenderer.drawBackground?.(target);
+            this._private__baseRenderer.drawBackground?.(target, drawingUtils);
         }
     }
     class PrimitivePaneViewWrapper {
@@ -2795,10 +3217,10 @@
             this._private__baseRenderer = baseRenderer;
         }
         _internal_draw(target, isHovered, hitTestData) {
-            this._private__baseRenderer.draw(target);
+            this._private__baseRenderer.draw(target, drawingUtils);
         }
         _internal_drawBackground(target, isHovered, hitTestData) {
-            this._private__baseRenderer.drawBackground?.(target);
+            this._private__baseRenderer.drawBackground?.(target, drawingUtils);
         }
     }
     class SeriesPrimitivePaneViewWrapper {
@@ -2965,6 +3387,9 @@
             this._private__barColorerCache = null;
             this._private__animationTimeoutId = null;
             this._private__primitives = [];
+            this._private__dataConflater = new DataConflater();
+            this._private__conflationByFactorCache = new Map();
+            this._private__customConflationReducer = null;
             this._private__options = options;
             this._private__seriesType = seriesType;
             const priceAxisView = new SeriesPriceAxisView(this);
@@ -2975,6 +3400,12 @@
             }
             this._private__recreateFormatter();
             this._private__paneView = createPaneView(this, this._internal_model(), customPaneView);
+            if (this._private__seriesType === 'Custom') {
+                const paneView = this._private__paneView;
+                if (paneView._internal_conflationReducer) {
+                    this._internal_setCustomConflationReducer(paneView._internal_conflationReducer);
+                }
+            }
         }
         _internal_destroy() {
             if (this._private__animationTimeoutId !== null) {
@@ -3044,28 +3475,44 @@
             return this._private__options;
         }
         _internal_applyOptions(options) {
-            const targetPriceScaleId = options.priceScaleId;
-            if (targetPriceScaleId !== undefined && targetPriceScaleId !== this._private__options.priceScaleId) {
+            const model = this._internal_model();
+            const { priceScaleId, visible, priceFormat } = options;
+            if (priceScaleId !== undefined && priceScaleId !== this._private__options.priceScaleId) {
                 // series cannot do it itself, ask model
-                this._internal_model()._internal_moveSeriesToScale(this, targetPriceScaleId);
+                model._internal_moveSeriesToScale(this, priceScaleId);
             }
+            if (visible !== undefined && visible !== this._private__options.visible) {
+                model._internal_invalidateVisibleSeries();
+            }
+            // Check if conflation-related options are changing
+            const conflationOptionsChanged = options.conflationThresholdFactor !== undefined;
             merge(this._private__options, options);
-            if (options.priceFormat !== undefined) {
+            if (conflationOptionsChanged) {
+                this._private__conflationByFactorCache.clear();
+                this._internal_model()._internal_lightUpdate();
+            }
+            if (priceFormat !== undefined) {
                 this._private__recreateFormatter();
                 // updated formatter might affect rendering  and as a consequence of this the width of price axis might be changed
                 // thus we need to force the chart to do a full update to apply changes correctly
                 // full update is quite heavy operation in terms of performance
                 // but updating formatter looks like quite rare so forcing a full update here shouldn't affect the performance a lot
-                this._internal_model()._internal_fullUpdate();
+                model._internal_fullUpdate();
             }
-            this._internal_model()._internal_updateSource(this);
+            model._internal_updateSource(this);
             // a series might affect crosshair by some options (like crosshair markers)
             // that's why we need to update crosshair as well
-            this._internal_model()._internal_updateCrosshair();
+            model._internal_updateCrosshair();
             this._private__paneView._internal_update('options');
         }
         _internal_setData(data, updateInfo) {
             this._private__data._internal_setData(data);
+            this._private__conflationByFactorCache.clear();
+            const ts = this._internal_model()._internal_timeScale();
+            const tsOptions = ts._internal_options();
+            if (tsOptions.enableConflation && tsOptions.precomputeConflationOnInit) {
+                this._private__precomputeConflationLevels(tsOptions.precomputeConflationPriority);
+            }
             this._private__paneView._internal_update('data');
             if (this._private__lastPriceAnimationPaneView !== null) {
                 if (updateInfo && updateInfo._internal_lastBarUpdatedOrNewBarsAddedToTheRight) {
@@ -3120,6 +3567,66 @@
         }
         _internal_bars() {
             return this._private__data;
+        }
+        _internal_setCustomConflationReducer(reducer) {
+            this._private__customConflationReducer = reducer;
+            // reset cache to respect new reducer
+            this._private__conflationByFactorCache.clear();
+        }
+        /**
+         * Check if conflation is currently enabled for this series.
+         */
+        _internal_isConflationEnabled() {
+            const timeScale = this._internal_model()._internal_timeScale();
+            if (!timeScale._internal_options().enableConflation) {
+                return false;
+            }
+            return this._private__calculateConflationFactor() > 1;
+        }
+        /**
+         * Efficiently update conflation when only the last data point changes.
+         * This avoids rebuilding all conflated chunks.
+         */
+        _internal_updateLastConflatedChunk(newLastRow) {
+            if (!this._internal_isConflationEnabled()) {
+                return;
+            }
+            const conflationFactor = this._private__calculateConflationFactor();
+            if (!this._private__conflationByFactorCache.has(conflationFactor)) {
+                return;
+            }
+            const isCustomSeries = this._private__seriesType === 'Custom';
+            const customReducer = isCustomSeries ? this._private__customConflationReducer || undefined : undefined;
+            const priceValueBuilder = isCustomSeries && this._private__paneView._internal_priceValueBuilder
+                ? (item) => {
+                    const customPaneView = this._private__paneView;
+                    const plotRow = item;
+                    const result = customPaneView._internal_priceValueBuilder(plotRow);
+                    return Array.isArray(result) ? result : [typeof result === 'number' ? result : 0];
+                }
+                : undefined;
+            const updatedConflatedRows = this._private__dataConflater._internal_updateLastConflatedChunk(this._private__data._internal_rows(), newLastRow, conflationFactor, customReducer, isCustomSeries, priceValueBuilder);
+            const conflatedList = createSeriesPlotList();
+            conflatedList._internal_setData(updatedConflatedRows);
+            this._private__conflationByFactorCache.set(conflationFactor, conflatedList);
+        }
+        _internal_conflatedBars() {
+            const timeScale = this._internal_model()._internal_timeScale();
+            const conflationEnabled = timeScale._internal_options().enableConflation;
+            if (this._private__seriesType === 'Custom' && this._private__customConflationReducer === null) {
+                return this._private__data;
+            }
+            if (!conflationEnabled) {
+                return this._private__data;
+            }
+            const factor = this._private__calculateConflationFactor();
+            const cached = this._private__conflationByFactorCache.get(factor);
+            if (cached) {
+                return cached;
+            }
+            this._private__regenerateConflatedDataByFactor(factor);
+            const built = this._private__conflationByFactorCache.get(factor);
+            return built ?? this._private__data;
         }
         _internal_dataAt(time) {
             const prices = this._private__data._internal_valueAt(time);
@@ -3216,8 +3723,9 @@
             }
             return this._private__autoscaleInfoImpl(startTimePoint, endTimePoint);
         }
-        _internal_minMove() {
-            return this._private__options.priceFormat.minMove;
+        _internal_base() {
+            const priceFormat = this._private__options.priceFormat;
+            return priceFormat.base ?? (1 / priceFormat.minMove);
         }
         _internal_formatter() {
             return this._private__formatter;
@@ -3366,7 +3874,11 @@
         _private__recreateFormatter() {
             switch (this._private__options.priceFormat.type) {
                 case 'custom': {
-                    this._private__formatter = { format: this._private__options.priceFormat.formatter };
+                    const formatter = this._private__options.priceFormat.formatter;
+                    this._private__formatter = {
+                        format: formatter,
+                        formatTickmarks: this._private__options.priceFormat.tickmarksFormatter ?? ((prices) => prices.map(formatter)),
+                    };
                     break;
                 }
                 case 'volume': {
@@ -3391,8 +3903,86 @@
             extractPrimitivePaneViews(this._private__primitives, extractor, zOrder, res);
             return res;
         }
+        _private__calculateConflationFactor() {
+            const { _internal_barSpacing: barSpacing, _internal_devicePixelRatio: devicePixelRatio, _internal_effectiveSmoothing: effectiveSmoothing } = this._private__getConflationParams();
+            return this._private__dataConflater._internal_calculateConflationLevelWithSmoothing(barSpacing, devicePixelRatio, effectiveSmoothing);
+        }
+        _private__getConflationParams() {
+            const timeScale = this._internal_model()._internal_timeScale();
+            const barSpacing = timeScale._internal_barSpacing();
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const globalSmoothing = timeScale._internal_options().conflationThresholdFactor;
+            const seriesSmoothing = this._private__options.conflationThresholdFactor;
+            const effectiveSmoothing = seriesSmoothing ?? globalSmoothing ?? 1.0;
+            return { _internal_barSpacing: barSpacing, _internal_devicePixelRatio: devicePixelRatio, _internal_effectiveSmoothing: effectiveSmoothing };
+        }
+        _private__buildConflatedListByFactor(factor) {
+            const originalRows = this._private__data._internal_rows();
+            let conflatedRows;
+            if (this._private__seriesType === 'Custom' && this._private__customConflationReducer !== null) {
+                const priceValueBuilder = this._internal_customSeriesPlotValuesBuilder();
+                if (!priceValueBuilder) {
+                    throw new Error(CONFLATION_ERROR_MESSAGES._internal_missingPriceValueBuilder);
+                }
+                conflatedRows = this._private__dataConflater._internal_conflateByFactor(originalRows, factor, this._private__customConflationReducer, true, (item) => priceValueBuilder(item));
+            }
+            else {
+                conflatedRows = this._private__dataConflater._internal_conflateByFactor(originalRows, factor);
+            }
+            const list = createSeriesPlotList();
+            list._internal_setData(conflatedRows);
+            return list;
+        }
+        _private__regenerateConflatedDataByFactor(factor) {
+            const list = this._private__buildConflatedListByFactor(factor);
+            this._private__conflationByFactorCache.set(factor, list);
+        }
+        _private__precomputeConflationLevels(priority) {
+            if (this._private__seriesType === 'Custom' &&
+                (this._private__customConflationReducer === null ||
+                    !this._internal_customSeriesPlotValuesBuilder())) {
+                return;
+            }
+            // Clear precomputed cache when data changes
+            this._private__conflationByFactorCache.clear();
+            const conflateFactors = this._internal_model()._internal_timeScale()._internal_possibleConflationFactors();
+            for (const lvl of conflateFactors) {
+                const task = () => {
+                    this._private__precomputeConflationLevel(lvl);
+                };
+                // Use Prioritized Task Scheduling API if available
+                const globalObj = ((typeof window === 'object' && window) || (typeof self === 'object' && self));
+                if (globalObj?._internal_scheduler?._internal_postTask) {
+                    void globalObj._internal_scheduler._internal_postTask(() => { task(); }, { _internal_priority: priority });
+                }
+                else {
+                    void Promise.resolve().then(() => task());
+                }
+            }
+        }
+        _private__precomputeConflationLevel(factor) {
+            // Check if already cached
+            if (this._private__conflationByFactorCache.has(factor)) {
+                return;
+            }
+            const originalRows = this._private__data._internal_rows();
+            if (originalRows.length === 0) {
+                return;
+            }
+            const list = this._private__buildConflatedListByFactor(factor);
+            this._private__conflationByFactorCache.set(factor, list);
+        }
     }
 
+    const magnetPlotRowKeys = [
+        3 /* PlotRowValueIndex.Close */,
+    ];
+    const magnetOHLCPlotRowKeys = [
+        0 /* PlotRowValueIndex.Open */,
+        1 /* PlotRowValueIndex.High */,
+        2 /* PlotRowValueIndex.Low */,
+        3 /* PlotRowValueIndex.Close */,
+    ];
     class Magnet {
         constructor(options) {
             this._private__options = options;
@@ -3425,7 +4015,10 @@
                 }
                 // convert bar to pixels
                 const firstPrice = ensure(series._internal_firstValue());
-                return acc.concat([ps._internal_priceToCoordinate(bar._internal_value[3 /* PlotRowValueIndex.Close */], firstPrice._internal_value)]);
+                const plotRowKeys = this._private__options.mode === 3 /* CrosshairMode.MagnetOHLC */
+                    ? magnetOHLCPlotRowKeys
+                    : magnetPlotRowKeys;
+                return acc.concat(plotRowKeys.map((key) => ps._internal_priceToCoordinate(bar._internal_value[key], firstPrice._internal_value)));
             }, []);
             if (candidates.length === 0) {
                 return res;
@@ -3435,6 +4028,52 @@
             res = defaultPriceScale._internal_coordinateToPrice(nearest, firstValue);
             return res;
         }
+    }
+
+    function clamp(value, minVal, maxVal) {
+        return Math.min(Math.max(value, minVal), maxVal);
+    }
+    function isBaseDecimal(value) {
+        if (value < 0) {
+            return false;
+        }
+        // cannot calculate exactly due to rounding error
+        if (value > 1e18) {
+            return true;
+        }
+        for (let current = value; current > 1; current /= 10) {
+            if ((current % 10) !== 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+    function greaterOrEqual(x1, x2, epsilon) {
+        return (x2 - x1) <= epsilon;
+    }
+    function equal(x1, x2, epsilon) {
+        return Math.abs(x1 - x2) < epsilon;
+    }
+    // We can't use Math.min(...arr) because that would only support arrays shorter than 65536 items.
+    function min(arr) {
+        if (arr.length < 1) {
+            throw Error('array is empty');
+        }
+        let minVal = arr[0];
+        for (let i = 1; i < arr.length; ++i) {
+            if (arr[i] < minVal) {
+                minVal = arr[i];
+            }
+        }
+        return minVal;
+    }
+    function ceiledEven(x) {
+        const ceiled = Math.ceil(x);
+        return (ceiled % 2 !== 0) ? ceiled - 1 : ceiled;
+    }
+    function ceiledOdd(x) {
+        const ceiled = Math.ceil(x);
+        return (ceiled % 2 === 0) ? ceiled - 1 : ceiled;
     }
 
     class GridRenderer extends BitmapCoordinatesPaneRenderer {
@@ -3519,6 +4158,24 @@
         _internal_paneView() {
             return this._private__paneView;
         }
+    }
+
+    function hoveredSourceOnTopOrder(sources, hoveredSource, enabled) {
+        if (!enabled) {
+            return sources;
+        }
+        const hoveredIndex = sources.indexOf(hoveredSource);
+        if (hoveredIndex === -1 || hoveredIndex === sources.length - 1) {
+            return sources;
+        }
+        const reorderedSources = [];
+        for (let i = 0; i < sources.length; i++) {
+            if (i !== hoveredIndex) {
+                reorderedSources.push(sources[i]);
+            }
+        }
+        reorderedSources.push(sources[hoveredIndex]);
+        return reorderedSources;
     }
 
     const defLogFormula = {
@@ -3616,48 +4273,6 @@
         return f1._internal_logicalOffset === f2._internal_logicalOffset && f1._internal_coordOffset === f2._internal_coordOffset;
     }
 
-    function clamp(value, minVal, maxVal) {
-        return Math.min(Math.max(value, minVal), maxVal);
-    }
-    function isBaseDecimal(value) {
-        if (value < 0) {
-            return false;
-        }
-        for (let current = value; current > 1; current /= 10) {
-            if ((current % 10) !== 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-    function greaterOrEqual(x1, x2, epsilon) {
-        return (x2 - x1) <= epsilon;
-    }
-    function equal(x1, x2, epsilon) {
-        return Math.abs(x1 - x2) < epsilon;
-    }
-    // We can't use Math.min(...arr) because that would only support arrays shorter than 65536 items.
-    function min(arr) {
-        if (arr.length < 1) {
-            throw Error('array is empty');
-        }
-        let minVal = arr[0];
-        for (let i = 1; i < arr.length; ++i) {
-            if (arr[i] < minVal) {
-                minVal = arr[i];
-            }
-        }
-        return minVal;
-    }
-    function ceiledEven(x) {
-        const ceiled = Math.ceil(x);
-        return (ceiled % 2 !== 0) ? ceiled - 1 : ceiled;
-    }
-    function ceiledOdd(x) {
-        const ceiled = Math.ceil(x);
-        return (ceiled % 2 === 0) ? ceiled - 1 : ceiled;
-    }
-
     class PriceTickSpanCalculator {
         constructor(base, integralDividers) {
             this._private__base = base;
@@ -3720,7 +4335,6 @@
         }
     }
 
-    const TICK_DENSITY = 2.5;
     class PriceTickMarkBuilder {
         constructor(priceScale, base, coordinateToLogicalFunc, logicalToCoordinateFunc) {
             this._private__marks = [];
@@ -3762,7 +4376,30 @@
                 this._private__marks = [];
                 return;
             }
-            let span = this._internal_tickSpan(high, low);
+            const span = this._internal_tickSpan(high, low);
+            this._private__updateMarks(firstValue, span, high, low, minCoord, maxCoord);
+            if (priceScale._internal_hasVisibleEdgeMarks() && this._private__shouldApplyEdgeMarks(span, low, high)) {
+                const padding = this._private__priceScale._internal_getEdgeMarksPadding();
+                this._private__applyEdgeMarks(firstValue, span, minCoord, maxCoord, padding, padding * 2);
+            }
+            const logicals = this._private__marks.map((mark) => mark._internal_logical);
+            const labels = this._private__priceScale._internal_formatLogicalTickmarks(logicals);
+            for (let i = 0; i < this._private__marks.length; i++) {
+                this._private__marks[i]._internal_label = labels[i];
+            }
+        }
+        _internal_marks() {
+            return this._private__marks;
+        }
+        _private__fontHeight() {
+            return this._private__priceScale._internal_fontSize();
+        }
+        _private__tickMarkHeight() {
+            return Math.ceil(this._private__fontHeight() * this._private__priceScale._internal_options().tickMarkDensity);
+        }
+        _private__updateMarks(firstValue, span, high, low, minCoord, maxCoord) {
+            const marks = this._private__marks;
+            const priceScale = this._private__priceScale;
             let mod = high % span;
             mod += mod < 0 ? span : 0;
             const sign = (high >= low) ? 1 : -1;
@@ -3779,14 +4416,16 @@
                 if (coord < minCoord || coord > maxCoord) {
                     continue;
                 }
-                if (targetIndex < this._private__marks.length) {
-                    this._private__marks[targetIndex]._internal_coord = coord;
-                    this._private__marks[targetIndex]._internal_label = priceScale._internal_formatLogical(logical);
+                if (targetIndex < marks.length) {
+                    marks[targetIndex]._internal_coord = coord;
+                    marks[targetIndex]._internal_label = priceScale._internal_formatLogical(logical);
+                    marks[targetIndex]._internal_logical = logical;
                 }
                 else {
-                    this._private__marks.push({
+                    marks.push({
                         _internal_coord: coord,
                         _internal_label: priceScale._internal_formatLogical(logical),
+                        _internal_logical: logical,
                     });
                 }
                 targetIndex++;
@@ -3796,16 +4435,43 @@
                     span = this._internal_tickSpan(logical * sign, low);
                 }
             }
-            this._private__marks.length = targetIndex;
+            marks.length = targetIndex;
         }
-        _internal_marks() {
-            return this._private__marks;
+        _private__applyEdgeMarks(firstValue, span, minCoord, maxCoord, minPadding, maxPadding) {
+            const marks = this._private__marks;
+            // top boundary
+            const topMark = this._private__computeBoundaryPriceMark(firstValue, minCoord, minPadding, maxPadding);
+            // bottom boundary
+            const bottomMark = this._private__computeBoundaryPriceMark(firstValue, maxCoord, -maxPadding, -minPadding);
+            const spanPx = this._private__logicalToCoordinateFunc(0, firstValue, true)
+                - this._private__logicalToCoordinateFunc(span, firstValue, true);
+            if (marks.length > 0 && marks[0]._internal_coord - topMark._internal_coord < spanPx / 2) {
+                marks.shift();
+            }
+            if (marks.length > 0 && bottomMark._internal_coord - marks[marks.length - 1]._internal_coord < spanPx / 2) {
+                marks.pop();
+            }
+            marks.unshift(topMark);
+            marks.push(bottomMark);
         }
-        _private__fontHeight() {
-            return this._private__priceScale._internal_fontSize();
+        _private__computeBoundaryPriceMark(firstValue, coord, minPadding, maxPadding) {
+            const avgPadding = (minPadding + maxPadding) / 2;
+            const value1 = this._private__coordinateToLogicalFunc(coord + minPadding, firstValue);
+            const value2 = this._private__coordinateToLogicalFunc(coord + maxPadding, firstValue);
+            const minValue = Math.min(value1, value2);
+            const maxValue = Math.max(value1, value2);
+            const valueSpan = Math.max(0.1, this._internal_tickSpan(maxValue, minValue));
+            const value = this._private__coordinateToLogicalFunc(coord + avgPadding, firstValue);
+            const roundedValue = value - (value % valueSpan);
+            const roundedCoord = this._private__logicalToCoordinateFunc(roundedValue, firstValue, true);
+            return { _internal_label: this._private__priceScale._internal_formatLogical(roundedValue), _internal_coord: roundedCoord, _internal_logical: roundedValue };
         }
-        _private__tickMarkHeight() {
-            return Math.ceil(this._private__fontHeight() * TICK_DENSITY);
+        _private__shouldApplyEdgeMarks(span, low, high) {
+            let range = ensure(this._private__priceScale._internal_priceRange());
+            if (this._private__priceScale._internal_isLog()) {
+                range = convertPriceRangeFromLog(range, this._private__priceScale._internal_getLogFormula());
+            }
+            return (range._internal_minValue() - low < span) && (high - range._internal_maxValue() < span);
         }
     }
 
@@ -3847,11 +4513,13 @@
             this._private__priceRange = null;
             this._private__priceRangeSnapshot = null;
             this._private__invalidatedForRange = { _internal_isValid: false, _internal_visibleBars: null };
+            this._private__isCustomPriceRange = false;
             this._private__marginAbove = 0;
             this._private__marginBelow = 0;
             this._private__onMarksChanged = new Delegate();
             this._private__modeChanged = new Delegate();
             this._private__dataSources = [];
+            this._private__formatterSource = null;
             this._private__cachedOrderedSources = null;
             this._private__marksCache = null;
             this._private__scaleStartPoint = null;
@@ -3896,6 +4564,9 @@
         _internal_isAutoScale() {
             return this._private__options.autoScale;
         }
+        _internal_isCustomPriceRange() {
+            return this._private__isCustomPriceRange;
+        }
         _internal_isLog() {
             return this._private__options.mode === 1 /* PriceScaleMode.Logarithmic */;
         }
@@ -3904,6 +4575,9 @@
         }
         _internal_isIndexedTo100() {
             return this._private__options.mode === 3 /* PriceScaleMode.IndexedTo100 */;
+        }
+        _internal_getLogFormula() {
+            return this._private__logFormula;
         }
         _internal_mode() {
             return {
@@ -3997,6 +4671,10 @@
             }
             this._private__marksCache = null;
             this._private__priceRange = newPriceRange;
+        }
+        _internal_setCustomPriceRange(newPriceRange) {
+            this._internal_setPriceRange(newPriceRange);
+            this._private__toggleCustomPriceRange(newPriceRange !== null);
         }
         _internal_isEmpty() {
             this._private__makeSureItIsValid();
@@ -4097,19 +4775,9 @@
             return this._private__dataSources;
         }
         _internal_orderedSources() {
-            if (this._private__cachedOrderedSources) {
-                return this._private__cachedOrderedSources;
+            if (!this._private__cachedOrderedSources) {
+                this._private__cachedOrderedSources = sortSources(this._private__dataSources);
             }
-            let sources = [];
-            for (let i = 0; i < this._private__dataSources.length; i++) {
-                const ds = this._private__dataSources[i];
-                if (ds._internal_zorder() === null) {
-                    ds._internal_setZorder(i + 1);
-                }
-                sources.push(ds);
-            }
-            sources = sortSources(sources);
-            this._private__cachedOrderedSources = sources;
             return this._private__cachedOrderedSources;
         }
         _internal_addDataSource(source) {
@@ -4283,8 +4951,18 @@
                     return this._private__formatPrice(logical);
             }
         }
+        _internal_formatLogicalTickmarks(logicals) {
+            switch (this._private__options.mode) {
+                case 2 /* PriceScaleMode.Percentage */:
+                    return this._private__formatPercentageTickmarks(logicals);
+                case 3 /* PriceScaleMode.IndexedTo100 */:
+                    return this._internal_formatter().formatTickmarks(logicals);
+                default:
+                    return this._private__formatTickmarks(logicals);
+            }
+        }
         _internal_formatPriceAbsolute(price) {
-            return this._private__formatPrice(price, ensureNotNull(this._private__formatterSource())._internal_formatter());
+            return this._private__formatPrice(price, ensureNotNull(this._private__formatterSource)._internal_formatter());
         }
         _internal_formatPricePercentage(price, baseValue) {
             price = toPercent(price, baseValue);
@@ -4302,12 +4980,26 @@
         _internal_updateAllViews() {
             this._private__dataSources.forEach((s) => s._internal_updateAllViews());
         }
+        _internal_hasVisibleEdgeMarks() {
+            return this._private__options.ensureEdgeTickMarksVisible && this._internal_isAutoScale();
+        }
+        _internal_getEdgeMarksPadding() {
+            return this._internal_fontSize() / 2;
+        }
         _internal_updateFormatter() {
             this._private__marksCache = null;
-            const formatterSource = this._private__formatterSource();
+            let zOrder = Infinity;
+            this._private__formatterSource = null;
+            // choose source with the lowest zorder
+            for (const source of this._private__dataSources) {
+                if (source._internal_zorder() < zOrder) {
+                    zOrder = source._internal_zorder();
+                    this._private__formatterSource = source;
+                }
+            }
             let base = 100;
-            if (formatterSource !== null) {
-                base = Math.round(1 / formatterSource._internal_minMove());
+            if (this._private__formatterSource !== null) {
+                base = Math.round(this._private__formatterSource._internal_base());
             }
             this._private__formatter = defaultPriceFormatter;
             if (this._internal_isPercentage()) {
@@ -4319,9 +5011,9 @@
                 base = 100;
             }
             else {
-                if (formatterSource !== null) {
+                if (this._private__formatterSource !== null) {
                     // user
-                    this._private__formatter = formatterSource._internal_formatter();
+                    this._private__formatter = this._private__formatterSource._internal_formatter();
                 }
             }
             this._private__markBuilder = new PriceTickMarkBuilder(this, base, this._private__coordinateToLogical.bind(this), this._private__logicalToCoordinate.bind(this));
@@ -4330,14 +5022,14 @@
         _internal_invalidateSourcesCache() {
             this._private__cachedOrderedSources = null;
         }
+        _internal_minMove() {
+            return this._private__formatterSource === null || this._internal_isPercentage() || this._internal_isIndexedTo100() ? 1 : 1 / this._private__formatterSource._internal_base();
+        }
         _internal_colorParser() {
             return this._private__colorParser;
         }
-        /**
-         * @returns The {@link IPriceDataSource} that will be used as the "formatter source" (take minMove for formatter).
-         */
-        _private__formatterSource() {
-            return this._private__dataSources[0] || null;
+        _private__toggleCustomPriceRange(v) {
+            this._private__isCustomPriceRange = v;
         }
         _private__topMarginPx() {
             return this._internal_isInverted()
@@ -4387,6 +5079,9 @@
         }
         // eslint-disable-next-line complexity
         _private__recalculatePriceRangeImpl() {
+            if (this._internal_isCustomPriceRange() && !this._internal_isAutoScale()) {
+                return;
+            }
             const visibleBars = this._private__invalidatedForRange._internal_visibleBars;
             if (visibleBars === null) {
                 return;
@@ -4432,6 +5127,10 @@
                     }
                 }
             }
+            if (this._internal_hasVisibleEdgeMarks()) {
+                marginAbove = Math.max(marginAbove, this._internal_getEdgeMarksPadding());
+                marginBelow = Math.max(marginBelow, this._internal_getEdgeMarksPadding());
+            }
             if (marginAbove !== this._private__marginAbove || marginBelow !== this._private__marginBelow) {
                 this._private__marginAbove = marginAbove;
                 this._private__marginBelow = marginBelow;
@@ -4441,11 +5140,9 @@
             if (priceRange !== null) {
                 // keep current range is new is empty
                 if (priceRange._internal_minValue() === priceRange._internal_maxValue()) {
-                    const formatterSource = this._private__formatterSource();
-                    const minMove = formatterSource === null || this._internal_isPercentage() || this._internal_isIndexedTo100() ? 1 : formatterSource._internal_minMove();
                     // if price range is degenerated to 1 point let's extend it by 10 min move values
                     // to avoid incorrect range and empty (blank) scale (in case of min tick much greater than 1)
-                    const extendValue = 5 * minMove;
+                    const extendValue = 5 * this._internal_minMove();
                     if (this._internal_isLog()) {
                         priceRange = convertPriceRangeFromLog(priceRange, this._private__logFormula);
                     }
@@ -4475,7 +5172,6 @@
                     this._private__logFormula = logFormulaForPriceRange(null);
                 }
             }
-            this._private__invalidatedForRange._internal_isValid = true;
         }
         _private__getCoordinateTransformer() {
             if (this._internal_isPercentage()) {
@@ -4498,18 +5194,35 @@
             }
             return formatter(value);
         }
+        _private__formatValues(values, formatter, fallbackFormatter) {
+            if (formatter === undefined) {
+                if (fallbackFormatter === undefined) {
+                    fallbackFormatter = this._internal_formatter();
+                }
+                return fallbackFormatter.formatTickmarks(values);
+            }
+            return formatter(values);
+        }
         _private__formatPrice(price, fallbackFormatter) {
             return this._private__formatValue(price, this._private__localizationOptions.priceFormatter, fallbackFormatter);
         }
+        _private__formatTickmarks(prices, fallbackFormatter) {
+            const priceFormatter = this._private__localizationOptions.priceFormatter;
+            return this._private__formatValues(prices, this._private__localizationOptions.tickmarksPriceFormatter ?? (priceFormatter ? (values) => values.map(priceFormatter) : undefined), fallbackFormatter);
+        }
         _private__formatPercentage(percentage, fallbackFormatter) {
             return this._private__formatValue(percentage, this._private__localizationOptions.percentageFormatter, fallbackFormatter);
+        }
+        _private__formatPercentageTickmarks(percentages, fallbackFormatter) {
+            const tickmarksPercentageFormatter = this._private__localizationOptions.percentageFormatter;
+            return this._private__formatValues(percentages, this._private__localizationOptions.tickmarksPercentageFormatter ?? (tickmarksPercentageFormatter ? (values) => values.map(tickmarksPercentageFormatter) : undefined), fallbackFormatter);
         }
     }
 
     function isSeries(source) {
         return source instanceof Series;
     }
-    const DEFAULT_STRETCH_FACTOR = 1000;
+    const DEFAULT_STRETCH_FACTOR = 1;
     const MIN_PANE_HEIGHT = 30;
     class Pane {
         constructor(timeScale, model) {
@@ -4519,6 +5232,8 @@
             this._private__width = 0;
             this._private__stretchFactor = DEFAULT_STRETCH_FACTOR;
             this._private__cachedOrderedSources = null;
+            this._private__cachedOrderedSourcesForRendering = null;
+            this._private__preserveEmptyPane = false;
             this._private__destroyed = new Delegate();
             this._private__primitives = [];
             this._private__timeScale = timeScale;
@@ -4621,6 +5336,12 @@
             });
             this._internal_updateAllSources();
         }
+        _internal_setPreserveEmptyPane(preserve) {
+            this._private__preserveEmptyPane = preserve;
+        }
+        _internal_preserveEmptyPane() {
+            return this._private__preserveEmptyPane;
+        }
         _internal_series() {
             return this._private__dataSources.filter(isSeries);
         }
@@ -4634,14 +5355,16 @@
             }
             return this._private__leftPriceScale !== priceScale && this._private__rightPriceScale !== priceScale;
         }
-        _internal_addDataSource(source, targetScaleId, zOrder) {
-            const targetZOrder = (zOrder !== undefined) ? zOrder : this._private__getZOrderMinMax()._internal_maxZOrder + 1;
-            this._private__insertDataSource(source, targetScaleId, targetZOrder);
+        _internal_addDataSource(source, targetScaleId, keepSourcesOrder) {
+            this._private__insertDataSource(source, targetScaleId, keepSourcesOrder ? source._internal_zorder() : this._private__dataSources.length);
         }
-        _internal_removeDataSource(source) {
+        _internal_removeDataSource(source, keepSourceOrder) {
             const index = this._private__dataSources.indexOf(source);
             assert(index !== -1, 'removeDataSource: invalid data source');
             this._private__dataSources.splice(index, 1);
+            if (!keepSourceOrder) {
+                this._private__dataSources.forEach((ds, i) => ds._internal_setZorder(i));
+            }
             const priceScaleId = ensureNotNull(source._internal_priceScale())._internal_id();
             if (this._private__overlaySourcesByScaleId.has(priceScaleId)) {
                 const overlaySources = ensureDefined(this._private__overlaySourcesByScaleId.get(priceScaleId));
@@ -4658,12 +5381,9 @@
             // and it does not have source in their list
             if (priceScale && priceScale._internal_dataSources().indexOf(source) >= 0) {
                 priceScale._internal_removeDataSource(source);
-            }
-            if (priceScale !== null) {
-                priceScale._internal_invalidateSourcesCache();
                 this._internal_recalculatePriceScale(priceScale);
             }
-            this._private__cachedOrderedSources = null;
+            this._private__invalidateSourceCaches();
         }
         _internal_priceScalePosition(priceScale) {
             if (priceScale === this._private__leftPriceScale) {
@@ -4707,30 +5427,31 @@
             });
         }
         _internal_defaultPriceScale() {
+            const [primaryPriceScale, secondaryPriceScale] = this._private__defaultPriceScalePair();
             let priceScale = null;
-            if (this._private__model._internal_options().rightPriceScale.visible && this._private__rightPriceScale._internal_dataSources().length !== 0) {
-                priceScale = this._private__rightPriceScale;
+            if (primaryPriceScale._internal_options().visible && primaryPriceScale._internal_dataSources().length !== 0) {
+                priceScale = primaryPriceScale;
             }
-            else if (this._private__model._internal_options().leftPriceScale.visible && this._private__leftPriceScale._internal_dataSources().length !== 0) {
-                priceScale = this._private__leftPriceScale;
+            else if (secondaryPriceScale._internal_options().visible && secondaryPriceScale._internal_dataSources().length !== 0) {
+                priceScale = secondaryPriceScale;
             }
             else if (this._private__dataSources.length !== 0) {
                 priceScale = this._private__dataSources[0]._internal_priceScale();
             }
             if (priceScale === null) {
-                priceScale = this._private__rightPriceScale;
+                priceScale = this._internal_defaultVisiblePriceScale() ?? primaryPriceScale;
             }
             return priceScale;
         }
         _internal_defaultVisiblePriceScale() {
-            let priceScale = null;
-            if (this._private__model._internal_options().rightPriceScale.visible) {
-                priceScale = this._private__rightPriceScale;
+            const [primaryPriceScale, secondaryPriceScale] = this._private__defaultPriceScalePair();
+            if (primaryPriceScale._internal_options().visible) {
+                return primaryPriceScale;
             }
-            else if (this._private__model._internal_options().leftPriceScale.visible) {
-                priceScale = this._private__leftPriceScale;
+            if (secondaryPriceScale._internal_options().visible) {
+                return secondaryPriceScale;
             }
-            return priceScale;
+            return null;
         }
         _internal_recalculatePriceScale(priceScale) {
             if (priceScale === null || !priceScale._internal_isAutoScale()) {
@@ -4766,6 +5487,37 @@
                 this._private__cachedOrderedSources = sortSources(this._private__dataSources);
             }
             return this._private__cachedOrderedSources;
+        }
+        _internal_orderedSourcesForRendering() {
+            const base = this._internal_orderedSources();
+            const hovered = this._private__model._internal_hoveredSource()?._internal_source;
+            const enabled = this._private__model._internal_options().hoveredSeriesOnTop;
+            const cached = this._private__cachedOrderedSourcesForRendering;
+            if (cached !== null && cached._internal_base === base && cached._internal_hovered === hovered && cached._internal_enabled === enabled) {
+                return cached._internal_result;
+            }
+            const result = hoveredSourceOnTopOrder(base, hovered, enabled);
+            this._private__cachedOrderedSourcesForRendering = {
+                _internal_base: base,
+                _internal_hovered: hovered,
+                _internal_enabled: enabled,
+                _internal_result: result,
+            };
+            return result;
+        }
+        _internal_setSeriesOrder(series, order) {
+            order = clamp(order, 0, this._private__dataSources.length - 1);
+            const index = this._private__dataSources.indexOf(series);
+            assert(index !== -1, 'setSeriesOrder: invalid data source');
+            this._private__dataSources.splice(index, 1);
+            this._private__dataSources.splice(order, 0, series);
+            this._private__dataSources.forEach((ps, i) => ps._internal_setZorder(i));
+            this._private__invalidateSourceCaches();
+            for (const ps of [this._private__leftPriceScale, this._private__rightPriceScale]) {
+                ps._internal_invalidateSourcesCache();
+                ps._internal_updateFormatter();
+            }
+            this._private__model._internal_lightUpdate();
         }
         _internal_orderedSeries() {
             return this._internal_orderedSources().filter(isSeries);
@@ -4805,43 +5557,31 @@
             }
             priceScale._internal_updateAllViews();
         }
-        _private__getZOrderMinMax() {
-            const sources = this._internal_orderedSources();
-            if (sources.length === 0) {
-                return { _internal_minZOrder: 0, _internal_maxZOrder: 0 };
-            }
-            let minZOrder = 0;
-            let maxZOrder = 0;
-            for (let j = 0; j < sources.length; j++) {
-                const ds = sources[j];
-                const zOrder = ds._internal_zorder();
-                if (zOrder !== null) {
-                    if (zOrder < minZOrder) {
-                        minZOrder = zOrder;
-                    }
-                    if (zOrder > maxZOrder) {
-                        maxZOrder = zOrder;
-                    }
-                }
-            }
-            return { _internal_minZOrder: minZOrder, _internal_maxZOrder: maxZOrder };
-        }
-        _private__insertDataSource(source, priceScaleId, zOrder) {
+        _private__insertDataSource(source, priceScaleId, order) {
             let priceScale = this._internal_priceScaleById(priceScaleId);
             if (priceScale === null) {
                 priceScale = this._private__createPriceScale(priceScaleId, this._private__model._internal_options().overlayPriceScales);
             }
-            this._private__dataSources.push(source);
+            this._private__dataSources.splice(order, 0, source);
             if (!isDefaultPriceScale(priceScaleId)) {
                 const overlaySources = this._private__overlaySourcesByScaleId.get(priceScaleId) || [];
                 overlaySources.push(source);
                 this._private__overlaySourcesByScaleId.set(priceScaleId, overlaySources);
             }
+            source._internal_setZorder(order);
             priceScale._internal_addDataSource(source);
             source._internal_setPriceScale(priceScale);
-            source._internal_setZorder(zOrder);
             this._internal_recalculatePriceScale(priceScale);
+            this._private__invalidateSourceCaches();
+        }
+        _private__invalidateSourceCaches() {
             this._private__cachedOrderedSources = null;
+            this._private__cachedOrderedSourcesForRendering = null;
+        }
+        _private__defaultPriceScalePair() {
+            return this._private__model._internal_options().defaultVisiblePriceScaleId === "left" /* DefaultPriceScaleId.Left */
+                ? [this._private__leftPriceScale, this._private__rightPriceScale]
+                : [this._private__rightPriceScale, this._private__leftPriceScale];
         }
         _private__onPriceScaleModeChanged(priceScale, oldMode, newMode) {
             if (oldMode._internal_mode === newMode._internal_mode) {
@@ -4858,28 +5598,67 @@
         }
     }
 
+    function isBetterHit(candidate, currentBest) {
+        if (currentBest === null) {
+            return true;
+        }
+        if (candidate._internal_priority === 2 /* HitTestPriority.Point */ && currentBest._internal_priority !== 2 /* HitTestPriority.Point */) {
+            return true;
+        }
+        if (currentBest._internal_priority === 2 /* HitTestPriority.Point */ && candidate._internal_priority !== 2 /* HitTestPriority.Point */) {
+            return false;
+        }
+        if (candidate._internal_distance !== currentBest._internal_distance) {
+            return candidate._internal_distance < currentBest._internal_distance;
+        }
+        // Preserve the existing draw/source order for equal-distance non-point ties.
+        // This prevents hidden strokes from overtaking visually covering range hits.
+        return false;
+    }
+
+    function hoveredObjectFromCandidate(candidate) {
+        return {
+            _internal_externalId: candidate._internal_externalId,
+            _internal_hitTestData: candidate._internal_hitTestData,
+        };
+    }
     // returns true if item is above reference
     function comparePrimitiveZOrder(item, reference) {
         return (!reference ||
             (item === 'top' && reference !== 'top') ||
             (item === 'normal' && reference === 'bottom'));
     }
+    function primitiveHitCandidate(hitResult) {
+        return {
+            _internal_distance: hitResult.distance ?? 0,
+            _internal_priority: hitResult.hitTestPriority ?? (hitResult.itemType === 'marker' ? 2 /* HitTestPriority.Point */ : 0 /* HitTestPriority.Range */),
+            _internal_itemType: hitResult.itemType ?? 'primitive',
+            _internal_cursorStyle: hitResult.cursorStyle,
+            _internal_externalId: hitResult.externalId,
+        };
+    }
     function findBestPrimitiveHitTest(sources, x, y) {
         let bestPrimitiveHit;
+        let bestPrimitiveCandidate;
         let bestHitSource;
         for (const source of sources) {
             const primitiveHitResults = source._internal_primitiveHitTest?.(x, y) ?? [];
             for (const hitResult of primitiveHitResults) {
-                if (comparePrimitiveZOrder(hitResult.zOrder, bestPrimitiveHit?.zOrder)) {
+                const candidate = primitiveHitCandidate(hitResult);
+                if (comparePrimitiveZOrder(hitResult.zOrder, bestPrimitiveHit?.zOrder) ||
+                    (hitResult.zOrder === bestPrimitiveHit?.zOrder && bestPrimitiveCandidate !== undefined && isBetterHit(candidate, bestPrimitiveCandidate)) ||
+                    (hitResult.zOrder === bestPrimitiveHit?.zOrder && bestPrimitiveCandidate === undefined)) {
                     bestPrimitiveHit = hitResult;
+                    bestPrimitiveCandidate = candidate;
                     bestHitSource = source;
                 }
             }
         }
-        if (!bestPrimitiveHit || !bestHitSource) {
+        if (!bestPrimitiveHit || !bestHitSource || !bestPrimitiveCandidate) {
             return null;
         }
         return {
+            _internal_candidate: bestPrimitiveCandidate,
             _internal_hit: bestPrimitiveHit,
             _internal_source: bestHitSource,
         };
@@ -4887,10 +5666,9 @@
     function convertPrimitiveHitResult(primitiveHit) {
         return {
             _internal_source: primitiveHit._internal_source,
-            _internal_object: {
-                _internal_externalId: primitiveHit._internal_hit.externalId,
-            },
-            _internal_cursorStyle: primitiveHit._internal_hit.cursorStyle,
+            _internal_object: hoveredObjectFromCandidate(primitiveHit._internal_candidate),
+            _internal_cursorStyle: primitiveHit._internal_candidate._internal_cursorStyle,
+            _internal_itemType: primitiveHit._internal_candidate._internal_itemType ?? 'primitive',
         };
     }
     /**
@@ -4899,51 +5677,72 @@
      * hit-tested result object, or null if no match is found.
      */
     function hitTestPaneView(paneViews, x, y, pane) {
+        let bestResult = null;
         for (const paneView of paneViews) {
-            const renderer = paneView._internal_renderer(pane);
-            if (renderer !== null && renderer._internal_hitTest) {
-                const result = renderer._internal_hitTest(x, y);
-                if (result !== null) {
-                    return {
-                        _internal_view: paneView,
-                        _internal_object: result,
-                    };
+            // Pane-view hit tests are an internal contract, so we can trust the typed
+            // InternalHitTestCandidate directly instead of probing build-mangled fields.
+            let candidate = paneView._internal_hitTest?.(x, y, pane) ?? null;
+            if (candidate === null) {
+                const renderer = paneView._internal_renderer(pane);
+                candidate = renderer !== null && renderer._internal_hitTest ? renderer._internal_hitTest(x, y) : null;
+            }
+            if (candidate !== null) {
+                const candidateResult = {
+                    _internal_view: paneView,
+                    _internal_candidate: candidate,
+                };
+                if (bestResult === null || isBetterHit(candidateResult._internal_candidate, bestResult._internal_candidate)) {
+                    bestResult = candidateResult;
                 }
             }
         }
-        return null;
+        return bestResult;
     }
     function isDataSource(source) {
         return source._internal_paneViews !== undefined;
     }
     // eslint-disable-next-line complexity
     function hitTestPane(pane, x, y) {
-        const sources = [pane, ...pane._internal_orderedSources()];
+        // Hover arbitration should use the pane's stable source order, not the temporary
+        // "hovered series on top" render order, otherwise the current hovered source can
+        // become sticky and keep winning equal-distance overlaps.
+        const sources = [pane, ...pane._internal_orderedSources()].reverse();
         const bestPrimitiveHit = findBestPrimitiveHitTest(sources, x, y);
         if (bestPrimitiveHit?._internal_hit.zOrder === 'top') {
             // a primitive hit on the 'top' layer will always beat the built-in hit tests
             // (on normal layer) so we can return early here.
             return convertPrimitiveHitResult(bestPrimitiveHit);
         }
+        let bestSourceHit = null;
+        let bestSourceCandidate = null;
         for (const source of sources) {
             if (bestPrimitiveHit && bestPrimitiveHit._internal_source === source && bestPrimitiveHit._internal_hit.zOrder !== 'bottom' && !bestPrimitiveHit._internal_hit.isBackground) {
-                // a primitive will be drawn above a built-in item like a series marker
-                // therefore it takes precedence here.
-                return convertPrimitiveHitResult(bestPrimitiveHit);
+                // A foreground primitive sits above its source's built-in views and blocks all lower sources,
+                // but hits from higher sources should still keep precedence.
+                return bestSourceHit ?? convertPrimitiveHitResult(bestPrimitiveHit);
             }
             if (isDataSource(source)) {
                 const sourceResult = hitTestPaneView(source._internal_paneViews(pane), x, y, pane);
                 if (sourceResult !== null) {
-                    return {
+                    const candidateHit = {
                         _internal_source: source,
                         _internal_view: sourceResult._internal_view,
-                        _internal_object: sourceResult._internal_object,
+                        _internal_object: hoveredObjectFromCandidate(sourceResult._internal_candidate),
+                        _internal_cursorStyle: sourceResult._internal_candidate._internal_cursorStyle,
+                        _internal_itemType: sourceResult._internal_candidate._internal_itemType ?? 'primitive',
                     };
+                    if (bestSourceHit === null || isBetterHit(sourceResult._internal_candidate, bestSourceCandidate)) {
+                        bestSourceHit = candidateHit;
+                        bestSourceCandidate = sourceResult._internal_candidate;
+                    }
                 }
             }
             if (bestPrimitiveHit && bestPrimitiveHit._internal_source === source && bestPrimitiveHit._internal_hit.zOrder !== 'bottom' && bestPrimitiveHit._internal_hit.isBackground) {
-                return convertPrimitiveHitResult(bestPrimitiveHit);
+                return bestSourceHit ?? convertPrimitiveHitResult(bestPrimitiveHit);
             }
+        }
+        if (bestSourceHit !== null) {
+            return bestSourceHit;
         }
         if (bestPrimitiveHit?._internal_hit) {
             // return primitive hits for the 'bottom' layer
@@ -5176,14 +5975,17 @@
             this._private__indicesWithData = new Map();
             this._private__indicesWithDataUpdateId = -1;
             this._private__labels = [];
+            this._private__conflationFactor = 1;
             this._private__options = options;
             this._private__localizationOptions = localizationOptions;
             this._private__rightOffset = options.rightOffset;
             this._private__barSpacing = options.barSpacing;
             this._private__model = model;
+            this._private__checkRightOffsetPixels(options);
             this._private__horzScaleBehavior = horzScaleBehavior;
             this._private__updateDateTimeFormatter();
             this._private__tickMarks._internal_setUniformDistribution(options.uniformDistribution);
+            this._private__updateConflationFactor();
             this._internal_recalculateIndicesWithData();
         }
         _internal_options() {
@@ -5210,6 +6012,7 @@
             if (options.rightOffset !== undefined) {
                 this._private__model._internal_setRightOffset(options.rightOffset);
             }
+            this._private__checkRightOffsetPixels(options);
             if (options.minBarSpacing !== undefined || options.maxBarSpacing !== undefined) {
                 // yes, if we apply bar spacing constrains then we need to correct bar spacing
                 // the easiest way is to apply it once again
@@ -5220,6 +6023,10 @@
             }
             this._private__invalidateTickMarks();
             this._private__updateDateTimeFormatter();
+            // Recompute conflation factor when options that may affect it change
+            if (options.enableConflation !== undefined || options.conflationThresholdFactor !== undefined) {
+                this._private__updateConflationFactor();
+            }
             this._private__optionsApplied._internal_fire();
         }
         _internal_indexToTime(index) {
@@ -5365,7 +6172,14 @@
             return this._private__barSpacing;
         }
         _internal_setBarSpacing(newBarSpacing) {
+            const oldBarSpacing = this._private__barSpacing;
             this._private__setBarSpacing(newBarSpacing);
+            if (this._private__options.rightOffsetPixels !== undefined && oldBarSpacing !== 0) {
+                // when in pixel mode, zooming should keep the pixel offset, so we need to
+                // recalculate the bar offset.
+                const newRightOffset = this._private__rightOffset * oldBarSpacing / this._private__barSpacing;
+                this._private__rightOffset = newRightOffset;
+            }
             // do not allow scroll out of visible bars
             this._private__correctOffset();
             this._private__model._internal_recalculateAllPanes();
@@ -5438,7 +6252,14 @@
         _internal_restoreDefault() {
             this._private__visibleRangeInvalidated = true;
             this._internal_setBarSpacing(this._private__options.barSpacing);
-            this._internal_setRightOffset(this._private__options.rightOffset);
+            let newOffset;
+            if (this._private__options.rightOffsetPixels !== undefined) {
+                newOffset = this._private__options.rightOffsetPixels / this._internal_barSpacing();
+            }
+            else {
+                newOffset = this._private__options.rightOffset;
+            }
+            this._internal_setRightOffset(newOffset);
         }
         _internal_setBaseIndex(baseIndex) {
             this._private__visibleRangeInvalidated = true;
@@ -5566,10 +6387,16 @@
             // see minRightOffset for example
             return this._private__baseIndexOrNull || 0;
         }
-        _internal_setVisibleRange(range) {
+        _internal_setVisibleRange(range, applyDefaultOffset) {
             const length = range._internal_count();
-            this._private__setBarSpacing(this._private__width / length);
+            const pixelOffset = (applyDefaultOffset && this._private__options.rightOffsetPixels) || 0;
+            this._private__setBarSpacing((this._private__width - pixelOffset) / length);
             this._private__rightOffset = range._internal_right() - this._internal_baseIndex();
+            if (applyDefaultOffset) {
+                this._private__rightOffset = pixelOffset
+                    ? pixelOffset / this._internal_barSpacing()
+                    : this._private__options.rightOffset;
+            }
             this._private__correctOffset();
             this._private__visibleRangeInvalidated = true;
             this._private__model._internal_recalculateAllPanes();
@@ -5581,7 +6408,10 @@
             if (first === null || last === null) {
                 return;
             }
-            this._internal_setVisibleRange(new RangeImpl(first, last + this._private__options.rightOffset));
+            // If we are not using rightOffsetPixels then we should include the user defined rightOffset
+            // in the Range so that the bar scaling considers the space required for the offset.
+            const rightOffsetBars = (!this._private__options.rightOffsetPixels && this._private__options.rightOffset) || 0;
+            this._internal_setVisibleRange(new RangeImpl(first, last + rightOffsetBars), true);
         }
         _internal_setLogicalRange(range) {
             const barRange = new RangeImpl(range.from, range.to);
@@ -5605,6 +6435,38 @@
                 }
             }
             this._private__indicesWithDataUpdateId++;
+        }
+        /**
+         * Returns the current data conflation factor.
+         * Factor \> 1 means data points should be conflated for performance.
+         */
+        _internal_conflationFactor() {
+            return this._private__conflationFactor;
+        }
+        /**
+         * Provides an array of possible conflations factors based on the current
+         * minBarSpacing setting for the chart.
+         * @returns Arrays of conflation factors (number of bars to merge)
+         */
+        _internal_possibleConflationFactors() {
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const conflationThreshold = 1.0 / devicePixelRatio;
+            const minBarSpacing = this._private__options.minBarSpacing;
+            if (minBarSpacing >= conflationThreshold) {
+                return [1];
+            }
+            // Return all power-of-2 conflation levels that might be used
+            const factors = [1];
+            let currentLevel = 2;
+            const maxLevel = 512;
+            while (currentLevel <= maxLevel) {
+                const levelThreshold = conflationThreshold / currentLevel;
+                if (minBarSpacing < levelThreshold) {
+                    factors.push(currentLevel);
+                }
+                currentLevel *= 2;
+            }
+            return factors;
         }
         _private__isAllScalingAndScrollingDisabled() {
             const handleScroll = this._private__model._internal_options()['handleScroll'];
@@ -5643,6 +6505,7 @@
             if (oldBarSpacing !== this._private__barSpacing) {
                 this._private__visibleRangeInvalidated = true;
                 this._private__resetTimeMarksCache();
+                this._private__updateConflationFactor();
             }
         }
         _private__updateVisibleRange() {
@@ -5685,6 +6548,29 @@
                 return this._private__width / this._private__points.length;
             }
             return this._private__options.minBarSpacing;
+        }
+        /**
+         * Updates the conflation factor based on current bar spacing using DPR-aware power-of-2 calculation with optional smoothing factor.
+         * The smoothing factor allows intentional over-conflation for smoother appearance in small charts and sparklines.
+         */
+        _private__updateConflationFactor() {
+            if (!this._private__options.enableConflation) {
+                this._private__conflationFactor = 1;
+                return;
+            }
+            // Use DPR-aware threshold calculation with smoothing factor
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const smoothingFactor = this._private__options.conflationThresholdFactor ?? 1;
+            const adjustedThreshold = (1.0 / devicePixelRatio) * smoothingFactor;
+            if (this._private__barSpacing >= adjustedThreshold) {
+                this._private__conflationFactor = 1;
+                return;
+            }
+            // Calculate conflation level as power of 2
+            const ratio = adjustedThreshold / this._private__barSpacing;
+            const conflationLevel = Math.pow(2, Math.floor(Math.log2(ratio)));
+            // Ensure we don't exceed maximum conflation level (512)
+            this._private__conflationFactor = Math.min(conflationLevel, 512);
         }
         _private__correctOffset() {
             // block scrolling of to past
@@ -5803,6 +6689,12 @@
             }
             return x; // fallback to original index
         }
+        _private__checkRightOffsetPixels(options) {
+            if (options.rightOffsetPixels !== undefined) {
+                const newOffset = options.rightOffsetPixels / (options.barSpacing || this._private__barSpacing);
+                this._private__model._internal_setRightOffset(newOffset);
+            }
+        }
     }
     function* testNearestIntegers(num) {
         const rounded = Math.round(num);
@@ -5846,6 +6738,7 @@
         constructor(invalidateHandler, options, horzScaleBehavior) {
             this._private__panes = [];
             this._private__serieses = [];
+            this._private__visibleSerieses = null;
             this._private__width = 0;
             this._private__hoveredSource = null;
             this._private__priceScalesOptionsChanged = new Delegate();
@@ -5859,8 +6752,10 @@
             this._private__timeScale = new TimeScale(this, options.timeScale, this._private__options.localization, horzScaleBehavior);
             this._private__crosshair = new Crosshair(this, options.crosshair);
             this._private__magnet = new Magnet(options.crosshair);
-            this._private__getOrCreatePane(0);
-            this._private__panes[0]._internal_setStretchFactor(DEFAULT_STRETCH_FACTOR * 2);
+            if (options.addDefaultPane) {
+                this._private__getOrCreatePane(0);
+                this._private__panes[0]._internal_setStretchFactor(DEFAULT_STRETCH_FACTOR * 2);
+            }
             this._private__backgroundTopColor = this._private__getBackgroundColor(0 /* BackgroundColorSide.Top */);
             this._private__backgroundBottomColor = this._private__getBackgroundColor(1 /* BackgroundColorSide.Bottom */);
         }
@@ -5881,7 +6776,11 @@
             return this._private__hoveredSource;
         }
         _internal_setHoveredSource(source) {
-            if (this._private__hoveredSource?._internal_source === source?._internal_source && this._private__hoveredSource?._internal_object?._internal_externalId === source?._internal_object?._internal_externalId) {
+            if (this._private__hoveredSource?._internal_source === source?._internal_source &&
+                this._private__hoveredSource?._internal_object?._internal_externalId === source?._internal_object?._internal_externalId &&
+                this._private__hoveredSource?._internal_object?._internal_hitTestData === source?._internal_object?._internal_hitTestData &&
+                this._private__hoveredSource?._internal_cursorStyle === source?._internal_cursorStyle &&
+                this._private__hoveredSource?._internal_itemType === source?._internal_itemType) {
                 return;
             }
             const prevSource = this._private__hoveredSource;
@@ -6031,6 +6930,15 @@
             this._private__panes[second] = firstPane;
             this._internal_fullUpdate();
         }
+        _internal_movePane(from, to) {
+            assert(from >= 0 && from < this._private__panes.length && to >= 0 && to < this._private__panes.length, 'Invalid pane index');
+            if (from === to) {
+                return;
+            }
+            const [paneToMove] = this._private__panes.splice(from, 1);
+            this._private__panes.splice(to, 0, paneToMove);
+            this._internal_fullUpdate();
+        }
         _internal_startScalePrice(pane, priceScale, x) {
             pane._internal_startScalePrice(priceScale, x);
         }
@@ -6114,6 +7022,15 @@
         _internal_serieses() {
             return this._private__serieses;
         }
+        _internal_visibleSerieses() {
+            if (this._private__visibleSerieses === null) {
+                this._private__visibleSerieses = this._private__serieses.filter((s) => s._internal_visible());
+            }
+            return this._private__visibleSerieses;
+        }
+        _internal_invalidateVisibleSeries() {
+            this._private__visibleSerieses = null;
+        }
         _internal_setAndSaveCurrentPosition(x, y, event, pane, skipEvent) {
             this._private__crosshair._internal_saveOriginCoord(x, y);
             let price = NaN;
@@ -6122,6 +7039,7 @@
             if (visibleBars !== null) {
                 index = Math.min(Math.max(visibleBars._internal_left(), index), visibleBars._internal_right());
             }
+            index = this._private__crosshair._internal_snapToVisibleSeriesIfNeeded(index);
             const priceScale = pane._internal_defaultPriceScale();
             const firstValue = priceScale._internal_firstValue();
             if (firstValue !== null) {
@@ -6132,7 +7050,12 @@
             this._internal_cursorUpdate();
             if (!skipEvent) {
                 const hitTest = hitTestPane(pane, x, y);
-                this._internal_setHoveredSource(hitTest && { _internal_source: hitTest._internal_source, _internal_object: hitTest._internal_object, _internal_cursorStyle: hitTest._internal_cursorStyle || null });
+                this._internal_setHoveredSource(hitTest && {
+                    _internal_source: hitTest._internal_source,
+                    _internal_object: hitTest._internal_object,
+                    _internal_cursorStyle: hitTest._internal_cursorStyle || null,
+                    _internal_itemType: hitTest._internal_itemType,
+                });
                 this._private__crosshairMoved._internal_fire(this._private__crosshair._internal_appliedIndex(), { x, y }, event);
             }
         }
@@ -6226,6 +7149,7 @@
             const pane = this._private__getOrCreatePane(paneIndex);
             this._private__addSeriesToPane(series, pane);
             this._private__serieses.push(series);
+            this._internal_invalidateVisibleSeries();
             if (this._private__serieses.length === 1) {
                 // call fullUpdate to recalculate chart's parts geometry
                 this._internal_fullUpdate();
@@ -6244,13 +7168,14 @@
             if (series._internal_destroy) {
                 series._internal_destroy();
             }
+            this._internal_invalidateVisibleSeries();
             this._private__timeScale._internal_recalculateIndicesWithData();
             this._private__cleanupIfPaneIsEmpty(paneImpl);
         }
         _internal_moveSeriesToScale(series, targetScaleId) {
             const pane = ensureNotNull(this._internal_paneForSource(series));
-            pane._internal_removeDataSource(series);
-            pane._internal_addDataSource(series, targetScaleId, ensureNotNull(series._internal_zorder()));
+            pane._internal_removeDataSource(series, true);
+            pane._internal_addDataSource(series, targetScaleId, true);
         }
         _internal_fitContent() {
             const mask = InvalidateMask._internal_light();
@@ -6288,7 +7213,13 @@
             this._private__invalidate(mask);
         }
         _internal_defaultVisiblePriceScaleId() {
-            return this._private__options.rightPriceScale.visible ? "right" /* DefaultPriceScaleId.Right */ : "left" /* DefaultPriceScaleId.Left */;
+            const preferredPriceScaleId = this._private__options.defaultVisiblePriceScaleId;
+            const leftVisible = this._private__options.leftPriceScale.visible;
+            const rightVisible = this._private__options.rightPriceScale.visible;
+            if (leftVisible !== rightVisible) {
+                return leftVisible ? "left" /* DefaultPriceScaleId.Left */ : "right" /* DefaultPriceScaleId.Right */;
+            }
+            return preferredPriceScaleId;
         }
         _internal_moveSeriesToPane(series, newPaneIndex) {
             assert(newPaneIndex >= 0, 'Index should be greater or equal to 0');
@@ -6300,8 +7231,12 @@
             previousPane._internal_removeDataSource(series);
             const newPane = this._private__getOrCreatePane(newPaneIndex);
             this._private__addSeriesToPane(series, newPane);
+            let paneWasRemoved = false;
             if (previousPane._internal_dataSources().length === 0) {
-                this._private__cleanupIfPaneIsEmpty(previousPane);
+                paneWasRemoved = this._private__cleanupIfPaneIsEmpty(previousPane);
+            }
+            if (!paneWasRemoved) {
+                this._internal_fullUpdate();
             }
         }
         _internal_backgroundBottomColor() {
@@ -6344,25 +7279,32 @@
         _internal_colorParser() {
             return this._private__colorParser;
         }
+        _internal_addPane() {
+            return this._private__addPane();
+        }
+        _private__addPane(index) {
+            const pane = new Pane(this._private__timeScale, this);
+            this._private__panes.push(pane);
+            const idx = index ?? this._private__panes.length - 1;
+            // we always do autoscaling on the creation
+            // if autoscale option is true, it is ok, just recalculate by invalidation mask
+            // if autoscale option is false, autoscale anyway on the first draw
+            // also there is a scenario when autoscale is true in constructor and false later on applyOptions
+            const mask = InvalidateMask._internal_full();
+            mask._internal_invalidatePane(idx, {
+                _internal_level: 0 /* InvalidationLevel.None */,
+                _internal_autoScale: true,
+            });
+            this._private__invalidate(mask);
+            return pane;
+        }
         _private__getOrCreatePane(index) {
             assert(index >= 0, 'Index should be greater or equal to 0');
             index = Math.min(this._private__panes.length, index);
             if (index < this._private__panes.length) {
                 return this._private__panes[index];
             }
-            const pane = new Pane(this._private__timeScale, this);
-            this._private__panes.push(pane);
-            // we always do autoscaling on the creation
-            // if autoscale option is true, it is ok, just recalculate by invalidation mask
-            // if autoscale option is false, autoscale anyway on the first draw
-            // also there is a scenario when autoscale is true in constructor and false later on applyOptions
-            const mask = InvalidateMask._internal_full();
-            mask._internal_invalidatePane(index, {
-                _internal_level: 0 /* InvalidationLevel.None */,
-                _internal_autoScale: true,
-            });
-            this._private__invalidate(mask);
-            return pane;
+            return this._private__addPane(index);
         }
         _private__seriesPaneIndex(series) {
             return this._private__panes.findIndex((pane) => pane._internal_series().includes(series));
@@ -6408,10 +7350,12 @@
             return layoutOptions.background.color;
         }
         _private__cleanupIfPaneIsEmpty(pane) {
-            if (pane._internal_dataSources().length === 0 && this._private__panes.length > 1) {
+            if (!pane._internal_preserveEmptyPane() && (pane._internal_dataSources().length === 0 && this._private__panes.length > 1)) {
                 this._private__panes.splice(this._internal_getPaneIndex(pane), 1);
                 this._internal_fullUpdate();
+                return true;
             }
+            return false;
         }
     }
 
@@ -7153,10 +8097,9 @@
         return DevicePixelContentBoxBinding;
     }());
     function bindTo(canvasElement, target) {
-        if (target.type === 'device-pixel-content-box') {
+        {
             return new DevicePixelContentBoxBinding(canvasElement, target.transform, target.options);
         }
-        throw new Error('Unsupported binding target');
     }
     function canvasElementWindow(canvasElement) {
         // According to DOM Level 2 Core specification, ownerDocument should never be null for HTMLCanvasElement
@@ -7326,6 +8269,59 @@
             // eslint-disable-next-line no-console
             console.warn(msg);
         }
+    }
+
+    function hoveredTargetSourceKind(source, itemType) {
+        if (source instanceof Pane) {
+            return 'pane-primitive';
+        }
+        if (itemType === 'marker' || itemType === 'primitive') {
+            return 'series-primitive';
+        }
+        return 'series';
+    }
+    function hoveredTargetObjectKind(itemType, objectId) {
+        switch (itemType) {
+            case 'custom':
+                return objectId !== undefined ? 'custom-object' : 'series';
+            case 'price-line':
+                return 'custom-price-line';
+            case 'marker':
+                return 'series-marker';
+            case 'primitive':
+                return 'primitive';
+            case 'series-point':
+            case 'series-line':
+            case 'series-range':
+            default:
+                return 'series';
+        }
+    }
+    function buildHoveredEventInfo(hoveredSource, paneIndex) {
+        const hoveredSeries = hoveredSource !== null && hoveredSource._internal_source instanceof Series
+            ? hoveredSource._internal_source
+            : undefined;
+        const hoveredObject = hoveredSource?._internal_object?._internal_externalId;
+        const normalizedPaneIndex = paneIndex !== undefined && paneIndex !== -1 ? paneIndex : undefined;
+        if (hoveredSource === null || hoveredSource._internal_itemType === undefined) {
+            return {
+                _internal_hoveredSeries: hoveredSeries,
+                _internal_hoveredObject: hoveredObject,
+            };
+        }
+        const hoveredInfo = {
+            _internal_type: hoveredSource._internal_itemType,
+            _internal_sourceKind: hoveredTargetSourceKind(hoveredSource._internal_source, hoveredSource._internal_itemType),
+            _internal_objectKind: hoveredTargetObjectKind(hoveredSource._internal_itemType, hoveredObject),
+            _internal_series: hoveredSeries,
+            _internal_objectId: hoveredObject,
+            _internal_paneIndex: normalizedPaneIndex,
+        };
+        return {
+            _internal_hoveredSeries: hoveredSeries,
+            _internal_hoveredObject: hoveredObject,
+            _internal_hoveredInfo: hoveredInfo,
+        };
     }
 
     // on Hi-DPI CSS size * Device Pixel Ratio should be integer to avoid smoothing
@@ -8309,7 +9305,6 @@
         const canvas = doc.createElement('canvas');
         parentElement.appendChild(canvas);
         const binding = bindTo(canvas, {
-            type: 'device-pixel-content-box',
             options: {
                 allowResizeObserver: true,
             },
@@ -8372,29 +9367,29 @@
         let currentGroupStart = 0;
         const initLabelHeight = views[0]._internal_height(rendererOptions, true);
         let spaceBeforeCurrentGroup = direction === 1
-            ? scaleHeight / 2 - (views[0]._internal_getFixedCoordinate() - initLabelHeight / 2)
-            : views[0]._internal_getFixedCoordinate() - initLabelHeight / 2 - scaleHeight / 2;
+            ? scaleHeight / 2 - (views[0]._internal_getRenderCoordinate() - initLabelHeight / 2)
+            : views[0]._internal_getRenderCoordinate() - initLabelHeight / 2 - scaleHeight / 2;
         spaceBeforeCurrentGroup = Math.max(0, spaceBeforeCurrentGroup);
         for (let i = 1; i < views.length; i++) {
             const view = views[i];
             const prev = views[i - 1];
             const height = prev._internal_height(rendererOptions, false);
-            const coordinate = view._internal_getFixedCoordinate();
-            const prevFixedCoordinate = prev._internal_getFixedCoordinate();
+            const coordinate = view._internal_getRenderCoordinate();
+            const prevCoordinate = prev._internal_getRenderCoordinate();
             const overlap = direction === 1
-                ? coordinate > prevFixedCoordinate - height
-                : coordinate < prevFixedCoordinate + height;
+                ? coordinate > prevCoordinate - height
+                : coordinate < prevCoordinate + height;
             if (overlap) {
-                const fixedCoordinate = prevFixedCoordinate - height * direction;
-                view._internal_setFixedCoordinate(fixedCoordinate);
-                const edgePoint = fixedCoordinate - direction * height / 2;
+                const renderCoordinate = prevCoordinate - height * direction;
+                view._internal_setRenderCoordinate(renderCoordinate);
+                const edgePoint = renderCoordinate - direction * height / 2;
                 const outOfViewport = direction === 1 ? edgePoint < 0 : edgePoint > scaleHeight;
                 if (outOfViewport && spaceBeforeCurrentGroup > 0) {
                     // shift the whole group up or down
                     const desiredGroupShift = direction === 1 ? -1 - edgePoint : edgePoint - scaleHeight;
                     const possibleShift = Math.min(desiredGroupShift, spaceBeforeCurrentGroup);
                     for (let k = currentGroupStart; k < views.length; k++) {
-                        views[k]._internal_setFixedCoordinate(views[k]._internal_getFixedCoordinate() + direction * possibleShift);
+                        views[k]._internal_setRenderCoordinate(views[k]._internal_getRenderCoordinate() + direction * possibleShift);
                     }
                     spaceBeforeCurrentGroup -= possibleShift;
                 }
@@ -8402,8 +9397,8 @@
             else {
                 currentGroupStart = i;
                 spaceBeforeCurrentGroup = direction === 1
-                    ? prevFixedCoordinate - height - coordinate
-                    : coordinate - (prevFixedCoordinate + height);
+                    ? prevCoordinate - height - coordinate
+                    : coordinate - (prevCoordinate + height);
             }
         }
     }
@@ -8613,10 +9608,14 @@
         _internal_getBitmapSize() {
             return this._private__canvasBinding.bitmapSize;
         }
-        _internal_drawBitmap(ctx, x, y) {
+        _internal_drawBitmap(ctx, x, y, addTopLayer) {
             const bitmapSize = this._internal_getBitmapSize();
             if (bitmapSize.width > 0 && bitmapSize.height > 0) {
                 ctx.drawImage(this._private__canvasBinding.canvasElement, x, y);
+                if (addTopLayer) {
+                    const topLayer = this._private__topCanvasBinding.canvasElement;
+                    ctx.drawImage(topLayer, x, y);
+                }
             }
         }
         _internal_update() {
@@ -8788,8 +9787,8 @@
                     const sourceViews = source._internal_priceAxisViews(paneState, priceScale);
                     // never align selected sources
                     sourceViews.forEach((view) => {
-                        view._internal_setFixedCoordinate(null);
-                        if (view._internal_isVisible()) {
+                        if (view._internal_isVisible() && view._internal_getFixedCoordinate() === null) {
+                            view._internal_setRenderCoordinate(null); // Clear the previous render coordinate
                             views.push(view);
                         }
                     });
@@ -8800,7 +9799,6 @@
             };
             // crosshair individually
             updateForSources(orderedSources);
-            views.forEach((view) => view._internal_setFixedCoordinate(view._internal_coordinate()));
             const options = this._private__priceScale._internal_options();
             if (!options.alignLabels) {
                 return;
@@ -8825,10 +9823,10 @@
                 const halfHeight = Math.floor(view._internal_height(rendererOptions) / 2);
                 const coordinate = view._internal_coordinate();
                 if (coordinate > -halfHeight && coordinate < halfHeight) {
-                    view._internal_setFixedCoordinate(halfHeight);
+                    view._internal_setRenderCoordinate(halfHeight);
                 }
                 if (coordinate > (this._private__size.height - halfHeight) && coordinate < this._private__size.height + halfHeight) {
-                    view._internal_setFixedCoordinate(this._private__size.height - halfHeight);
+                    view._internal_setRenderCoordinate(this._private__size.height - halfHeight);
                 }
             }
             recalculateOverlapping(top, 1, this._private__size.height, rendererOptions);
@@ -9073,6 +10071,7 @@
                 return;
             }
             this._private__onMouseEvent();
+            this._private__setCrosshairPosition(event.localX, event.localY, event);
             this._private__fireClickedDelegate(event);
         }
         _internal_mouseDoubleClickEvent(event) {
@@ -9218,10 +10217,16 @@
         _internal_getBitmapSize() {
             return this._private__canvasBinding.bitmapSize;
         }
-        _internal_drawBitmap(ctx, x, y) {
+        _internal_drawBitmap(ctx, x, y, addTopLayer) {
             const bitmapSize = this._internal_getBitmapSize();
             if (bitmapSize.width > 0 && bitmapSize.height > 0) {
                 ctx.drawImage(this._private__canvasBinding.canvasElement, x, y);
+                if (addTopLayer) {
+                    const topLayer = this._private__topCanvasBinding.canvasElement;
+                    if (ctx !== null) {
+                        ctx.drawImage(topLayer, x, y);
+                    }
+                }
             }
         }
         _internal_paint(type) {
@@ -9319,7 +10324,7 @@
         }
         _private__drawSources(target, paneViewsGetter) {
             const state = ensureNotNull(this._private__state);
-            const sources = state._internal_orderedSources();
+            const sources = state._internal_orderedSourcesForRendering();
             const panePrimitives = state._internal_primitives();
             for (const panePrimitive of panePrimitives) {
                 this._private__drawSourceImpl(target, paneViewsGetter, drawBackground, panePrimitive);
@@ -9374,14 +10379,10 @@
         _private__preventScroll(event) {
             return event._internal_isTouch && this._private__longTap || this._private__startTrackPoint !== null;
         }
-        _private__correctXCoord(x) {
-            return Math.max(0, Math.min(x, this._private__size.width - 1));
-        }
-        _private__correctYCoord(y) {
-            return Math.max(0, Math.min(y, this._private__size.height - 1));
-        }
         _private__setCrosshairPosition(x, y, event) {
-            this._private__model()._internal_setAndSaveCurrentPosition(this._private__correctXCoord(x), this._private__correctYCoord(y), event, ensureNotNull(this._private__state));
+            x = Math.max(0, Math.min(x, this._private__size.width - 1));
+            y = Math.max(0, Math.min(y, this._private__size.height - 1));
+            this._private__model()._internal_setAndSaveCurrentPosition(x, y, event, ensureNotNull(this._private__state));
         }
         _private__clearCrosshairPosition() {
             this._private__model()._internal_clearCurrentPosition();
@@ -9776,10 +10777,14 @@
         _internal_getBitmapSize() {
             return this._private__canvasBinding.bitmapSize;
         }
-        _internal_drawBitmap(ctx, x, y) {
+        _internal_drawBitmap(ctx, x, y, addTopLayer) {
             const bitmapSize = this._internal_getBitmapSize();
             if (bitmapSize.width > 0 && bitmapSize.height > 0) {
                 ctx.drawImage(this._private__canvasBinding.canvasElement, x, y);
+                if (addTopLayer) {
+                    const topLayer = this._private__topCanvasBinding.canvasElement;
+                    ctx.drawImage(topLayer, x, y);
+                }
             }
         }
         _internal_paint(type) {
@@ -10100,12 +11105,28 @@
             this._private__width = sizeHint.width;
             const heightStr = this._private__height + 'px';
             const widthStr = this._private__width + 'px';
-            ensureNotNull(this._private__element).style.height = heightStr;
-            ensureNotNull(this._private__element).style.width = widthStr;
+            // When autoSize is enabled, keep outer element at 100%/100% to avoid jitter
+            // from pixel rounding differences between container and chart size
+            if (!this._internal_autoSizeActive()) {
+                ensureNotNull(this._private__element).style.height = heightStr;
+                ensureNotNull(this._private__element).style.width = widthStr;
+            }
             this._private__tableElement.style.height = heightStr;
             this._private__tableElement.style.width = widthStr;
             if (forceRepaint) {
-                this._private__drawImpl(InvalidateMask._internal_full(), performance.now());
+                // Cancel any pending animation frame since we're doing a synchronous paint
+                if (this._private__drawRafId !== 0) {
+                    window.cancelAnimationFrame(this._private__drawRafId);
+                    this._private__drawRafId = 0;
+                }
+                this._private__drawPlanned = false;
+                // Merge any pending invalidations and clear them
+                const mask = InvalidateMask._internal_full();
+                if (this._private__invalidateMask !== null) {
+                    mask._internal_merge(this._private__invalidateMask);
+                    this._private__invalidateMask = null;
+                }
+                this._private__drawImpl(mask, performance.now());
             }
             else {
                 this._private__model._internal_fullUpdate();
@@ -10147,7 +11168,7 @@
         _internal_crosshairMoved() {
             return this._private__crosshairMoved;
         }
-        _internal_takeScreenshot() {
+        _internal_takeScreenshot(addTopLayer = false) {
             if (this._private__invalidateMask !== null) {
                 this._private__drawImpl(this._private__invalidateMask, performance.now());
                 this._private__invalidateMask = null;
@@ -10157,7 +11178,7 @@
             screenshotCanvas.width = screeshotBitmapSize.width;
             screenshotCanvas.height = screeshotBitmapSize.height;
             const ctx = ensureNotNull(screenshotCanvas.getContext('2d'));
-            this._private__traverseLayout(ctx);
+            this._private__traverseLayout(ctx, addTopLayer);
             return screenshotCanvas;
         }
         _internal_getPriceAxisWidth(position) {
@@ -10226,9 +11247,10 @@
          * draws the screenshot (if rendering context is passed) and returns the screenshot bitmap size
          *
          * @param ctx - if passed, used to draw the screenshot of widget
+         * @param addTopLayer - if true, the top layer with crosshair and primitives will be drawn
          * @returns screenshot bitmap size
          */
-        _private__traverseLayout(ctx) {
+        _private__traverseLayout(ctx, addTopLayer) {
             let totalWidth = 0;
             let totalHeight = 0;
             const firstPane = this._private__paneWidgets[0];
@@ -10239,7 +11261,7 @@
                     const priceAxisWidget = ensureNotNull(position === 'left' ? paneWidget._internal_leftPriceAxisWidget() : paneWidget._internal_rightPriceAxisWidget());
                     const bitmapSize = priceAxisWidget._internal_getBitmapSize();
                     if (ctx !== null) {
-                        priceAxisWidget._internal_drawBitmap(ctx, targetX, targetY);
+                        priceAxisWidget._internal_drawBitmap(ctx, targetX, targetY, addTopLayer);
                     }
                     targetY += bitmapSize.height;
                     if (paneIndex < this._private__paneWidgets.length - 1) {
@@ -10262,7 +11284,7 @@
                 const paneWidget = this._private__paneWidgets[paneIndex];
                 const bitmapSize = paneWidget._internal_getBitmapSize();
                 if (ctx !== null) {
-                    paneWidget._internal_drawBitmap(ctx, totalWidth, totalHeight);
+                    paneWidget._internal_drawBitmap(ctx, totalWidth, totalHeight, addTopLayer);
                 }
                 totalHeight += bitmapSize.height;
                 if (paneIndex < this._private__paneWidgets.length - 1) {
@@ -10295,7 +11317,7 @@
                         drawStub('left', targetX, totalHeight);
                         targetX = ensureNotNull(firstPane._internal_leftPriceAxisWidget())._internal_getBitmapSize().width;
                     }
-                    this._private__timeAxisWidget._internal_drawBitmap(ctx, targetX, totalHeight);
+                    this._private__timeAxisWidget._internal_drawBitmap(ctx, targetX, totalHeight, addTopLayer);
                     targetX += timeAxisBitmapSize.width;
                     if (this._private__isRightAxisVisible()) {
                         drawStub('right', targetX, totalHeight);
@@ -10582,21 +11604,17 @@
                 }
             }
             const hoveredSource = this._internal_model()._internal_hoveredSource();
-            const hoveredSeries = hoveredSource !== null && hoveredSource._internal_source instanceof Series
-                ? hoveredSource._internal_source
-                : undefined;
-            const hoveredObject = hoveredSource !== null && hoveredSource._internal_object !== undefined
-                ? hoveredSource._internal_object._internal_externalId
-                : undefined;
             const paneIndex = this._private__getPaneIndex(pane);
+            const hoveredInfo = buildHoveredEventInfo(hoveredSource, paneIndex);
             return {
                 _internal_originalTime: clientTime,
                 _internal_index: index ?? undefined,
                 _internal_point: point ?? undefined,
                 _internal_paneIndex: paneIndex !== -1 ? paneIndex : undefined,
-                _internal_hoveredSeries: hoveredSeries,
+                _internal_hoveredSeries: hoveredInfo._internal_hoveredSeries,
                 _internal_seriesData: seriesData,
-                _internal_hoveredObject: hoveredObject,
+                _internal_hoveredObject: hoveredInfo._internal_hoveredObject,
+                _internal_hoveredInfo: hoveredInfo._internal_hoveredInfo,
                 _internal_touchMouseEventData: event ?? undefined,
             };
         }
@@ -10650,7 +11668,13 @@
                         // this may be undefined if the entries array was empty.
                         return;
                     }
-                    this._internal_resize(containerEntry.contentRect.width, containerEntry.contentRect.height);
+                    const newW = containerEntry.contentRect.width;
+                    const newH = containerEntry.contentRect.height;
+                    // Use forceRepaint=true to paint synchronously within this callback,
+                    // rather than scheduling to the next animation frame. This prevents
+                    // the visual "jitter" that occurs when the container has resized but
+                    // the canvas hasn't repainted yet.
+                    this._internal_resize(newW, newH, true);
                 });
                 this._private__observer.observe(this._private__container, { box: 'border-box' });
                 return true;
@@ -10928,7 +11952,12 @@
         _internal_removeSeries(series) {
             return this._internal_setSeriesData(series, []);
         }
+        // eslint-disable-next-line complexity
         _internal_updateSeriesData(series, data, historicalUpdate) {
+            // check if conflation is enabled and this is a historical update
+            if (historicalUpdate && series._internal_isConflationEnabled()) {
+                throw new Error('Historical updates are not supported when conflation is enabled. Conflation requires data to be processed in order.');
+            }
             const extendedData = data;
             saveOriginalTime(extendedData);
             // convertStringToBusinessDay(data);
@@ -10956,9 +11985,18 @@
             const dataToPlotRow = series._internal_customSeriesPlotValuesBuilder();
             const customWhitespaceChecker = series._internal_customSeriesWhitespaceCheck();
             const plotRow = createPlotRow(time, pointDataAtTime._internal_index, data, extendedData._internal_originalTime, dataToPlotRow, customWhitespaceChecker);
+            // For efficient conflation updates, check if this is just updating the last bar
+            const isLastBarUpdate = !historicalUpdate &&
+                !affectsTimeScale &&
+                lastSeriesTime !== undefined &&
+                this._private__horzScaleBehavior.key(time) === this._private__horzScaleBehavior.key(lastSeriesTime);
             pointDataAtTime._internal_mapping.set(series, plotRow);
             if (historicalUpdate) {
                 this._private__updateHistoricalSeriesRow(series, plotRow, pointDataAtTime._internal_index);
+            }
+            else if (isLastBarUpdate && series._internal_isConflationEnabled() && isSeriesPlotRow(plotRow)) {
+                series._internal_updateLastConflatedChunk(plotRow);
+                this._private__updateLastSeriesRow(series, plotRow);
             }
             else {
                 this._private__updateLastSeriesRow(series, plotRow);
@@ -10987,6 +12025,42 @@
             }
             this._private__horzScaleBehavior.fillWeightsForPoints(this._private__sortedTimePoints, insertIndex);
             return this._private__getUpdateResponse(series, insertIndex, info);
+        }
+        _internal_popSeriesData(series, count) {
+            const seriesData = this._private__seriesRowsBySeries.get(series);
+            if (seriesData === undefined || count <= 0) {
+                return [[], this._private__emptyUpdateResponse()];
+            }
+            count = Math.min(count, seriesData.length);
+            const poppedData = seriesData.splice(-count).reverse();
+            if (seriesData.length === 0) {
+                this._private__seriesLastTimePoint.delete(series);
+            }
+            else {
+                this._private__seriesLastTimePoint.set(series, seriesData[seriesData.length - 1]._internal_time);
+            }
+            for (const data of poppedData) {
+                const pointData = this._private__pointDataByTimePoint.get(this._private__horzScaleBehavior.key(data._internal_time));
+                if (!pointData) {
+                    continue;
+                }
+                pointData._internal_mapping.delete(series);
+                if (pointData._internal_mapping.size !== 0) {
+                    continue;
+                }
+                // No remaining data at this timepoint therefore we need to remove the internal
+                // timescale point and update the indices.
+                this._private__pointDataByTimePoint.delete(this._private__horzScaleBehavior.key(pointData._internal_timePoint));
+                this._private__sortedTimePoints.splice(pointData._internal_index, 1);
+                for (let index = pointData._internal_index; index < this._private__sortedTimePoints.length; ++index) {
+                    assignIndexToPointData(this._private__sortedTimePoints[index].pointData, index);
+                }
+            }
+            const info = {
+                _internal_historicalUpdate: false,
+                _internal_lastBarUpdatedOrNewBarsAddedToTheRight: false,
+            };
+            return [poppedData, this._private__getUpdateResponse(series, this._private__sortedTimePoints.length - 1, info)];
         }
         _private__updateLastSeriesRow(series, plotRow) {
             let seriesData = this._private__seriesRowsBySeries.get(series);
@@ -11097,12 +12171,7 @@
             return baseIndex;
         }
         _private__getUpdateResponse(updatedSeries, firstChangedPointIndex, info) {
-            const dataUpdateResponse = {
-                _internal_series: new Map(),
-                _internal_timeScale: {
-                    _internal_baseIndex: this._private__getBaseIndex(),
-                },
-            };
+            const dataUpdateResponse = this._private__emptyUpdateResponse();
             if (firstChangedPointIndex !== -1) {
                 // TODO: it's possible to make perf improvements by checking what series has data after firstChangedPointIndex
                 // but let's skip for now
@@ -11128,6 +12197,14 @@
             }
             return dataUpdateResponse;
         }
+        _private__emptyUpdateResponse() {
+            return {
+                _internal_series: new Map(),
+                _internal_timeScale: {
+                    _internal_baseIndex: this._private__getBaseIndex(),
+                },
+            };
+        }
     }
     function assignIndexToPointData(pointData, index) {
         // first, nevertheless update index of point data ("make it valid")
@@ -11136,6 +12213,90 @@
         pointData._internal_mapping.forEach((seriesRow) => {
             seriesRow._internal_index = index;
         });
+    }
+
+    function lowerBoundByCoordinate(item, value) {
+        return item._internal_x < value;
+    }
+    function upperBoundByCoordinate(item, value) {
+        return value < item._internal_x;
+    }
+    function lowerBoundByX(items, value, from, to) {
+        return lowerBound(items, value, lowerBoundByCoordinate, from, to);
+    }
+    function upperBoundByX(items, value, from, to) {
+        return upperBound(items, value, upperBoundByCoordinate, from, to);
+    }
+    function hoveredSeriesHitTestResult(distance, priority, itemType) {
+        return { _internal_distance: distance, _internal_priority: priority, _internal_itemType: itemType };
+    }
+    function isWithinHorizontalSweep(x, left, right, radius) {
+        return x >= left - radius && x <= right + radius;
+    }
+    function distanceToSegment(x, y, x1, y1, x2, y2) {
+        const deltaX = x2 - x1;
+        const deltaY = y2 - y1;
+        if (deltaX === 0 && deltaY === 0) {
+            return Math.hypot(x - x1, y - y1);
+        }
+        const projection = ((x - x1) * deltaX + (y - y1) * deltaY) / (deltaX * deltaX + deltaY * deltaY);
+        const clampedProjection = Math.max(0, Math.min(1, projection));
+        const closestX = x1 + deltaX * clampedProjection;
+        const closestY = y1 + deltaY * clampedProjection;
+        return Math.hypot(x - closestX, y - closestY);
+    }
+    const rangePair = [0, 0];
+
+    function slotStart(item, previousItem, barSpacing) {
+        if (previousItem === undefined || previousItem._internal_time !== item._internal_time - 1) {
+            return item._internal_x - barSpacing / 2;
+        }
+        return (previousItem._internal_x + item._internal_x) / 2;
+    }
+    function slotEnd(item, nextItem, barSpacing) {
+        if (nextItem === undefined || nextItem._internal_time !== item._internal_time + 1) {
+            return item._internal_x + barSpacing / 2;
+        }
+        return (item._internal_x + nextItem._internal_x) / 2;
+    }
+    // eslint-disable-next-line max-params, complexity
+    function hitTestSeriesRange(items, visibleRange, x, y, barSpacing, hitTestTolerance, rangeProvider) {
+        if (visibleRange === null || visibleRange.from >= visibleRange.to || items.length === 0) {
+            return null;
+        }
+        const horizontalRadius = barSpacing / 2 + hitTestTolerance;
+        const candidateFrom = lowerBoundByX(items, x - horizontalRadius, visibleRange.from, visibleRange.to);
+        const candidateTo = upperBoundByX(items, x + horizontalRadius, candidateFrom, visibleRange.to);
+        if (candidateFrom >= candidateTo) {
+            return null;
+        }
+        let minDistance = Number.POSITIVE_INFINITY;
+        for (let itemIndex = candidateFrom; itemIndex < candidateTo; itemIndex++) {
+            const item = items[itemIndex];
+            const previousItem = itemIndex > visibleRange.from ? items[itemIndex - 1] : undefined;
+            const nextItem = itemIndex < visibleRange.to - 1 ? items[itemIndex + 1] : undefined;
+            const leftBoundary = slotStart(item, previousItem, barSpacing) - hitTestTolerance;
+            const rightBoundary = slotEnd(item, nextItem, barSpacing) + hitTestTolerance;
+            if (x < leftBoundary || x > rightBoundary) {
+                continue;
+            }
+            rangeProvider(item, rangePair);
+            const rangeStart = rangePair[0];
+            const rangeEnd = rangePair[1];
+            const actualTop = Math.min(rangeStart, rangeEnd);
+            const actualBottom = Math.max(rangeStart, rangeEnd);
+            const top = actualTop - hitTestTolerance;
+            const bottom = actualBottom + hitTestTolerance;
+            if (y >= actualTop && y <= actualBottom) {
+                minDistance = Math.min(minDistance, 0);
+                continue;
+            }
+            if (y >= top && y <= bottom) {
+                const distance = Math.min(Math.abs(y - actualTop), Math.abs(actualBottom - y));
+                minDistance = Math.min(minDistance, distance);
+            }
+        }
+        return Number.isFinite(minDistance) ? hoveredSeriesHitTestResult(minDistance, 0 /* HitTestPriority.Range */, 'series-range') : null;
     }
 
     function lowerBoundItemsCompare(item, time) {
@@ -11170,6 +12331,7 @@
             this._internal__optionsInvalidated = true;
             this._internal__items = [];
             this._internal__itemsVisibleRange = null;
+            this._private__lastConflationKey = -1;
             this._internal__series = series;
             this._internal__model = model;
             this._private__extendedVisibleRange = extendedVisibleRange;
@@ -11187,8 +12349,21 @@
             if (!this._internal__series._internal_visible()) {
                 return null;
             }
-            this._private__makeValid();
+            this._internal__makeValid();
             return this._internal__itemsVisibleRange === null ? null : this._internal__renderer;
+        }
+        _internal_hitTest(x, y) {
+            if (!this._internal__series._internal_visible()) {
+                return null;
+            }
+            this._internal__makeValid();
+            if (this._internal__itemsVisibleRange === null) {
+                return null;
+            }
+            return this._internal__hitTestImpl(x, y);
+        }
+        _internal__hitTestImpl(x, y) {
+            return null;
         }
         _internal__updateOptions() {
             this._internal__items = this._internal__items.map((item) => ({
@@ -11199,7 +12374,16 @@
         _internal__clearVisibleRange() {
             this._internal__itemsVisibleRange = null;
         }
-        _private__makeValid() {
+        _internal__makeValid() {
+            // If the conflation setting or factor changed (due to zoom/barSpacing),
+            // we must rebuild raw items from series data.
+            const timeScale = this._internal__model._internal_timeScale();
+            const conflationEnabled = timeScale._internal_options().enableConflation;
+            const currentConflationKey = conflationEnabled ? timeScale._internal_conflationFactor() : 0;
+            if (currentConflationKey !== this._private__lastConflationKey) {
+                this._internal__dataInvalidated = true;
+                this._private__lastConflationKey = currentConflationKey;
+            }
             if (this._internal__dataInvalidated) {
                 this._internal__fillRawPoints();
                 this._internal__dataInvalidated = false;
@@ -11246,17 +12430,38 @@
             this._private__sourceRenderer.draw(target, this._private__priceScale, isHovered, hitTestData);
         }
     }
+    function customHitPriority(type) {
+        switch (type) {
+            case 'point':
+                return 2 /* HitTestPriority.Point */;
+            case 'range':
+                return 0 /* HitTestPriority.Range */;
+            case 'line':
+            case 'custom':
+            default:
+                return 1 /* HitTestPriority.Line */;
+        }
+    }
+    function normalizeCustomHit(result) {
+        return {
+            _internal_distance: result.distance,
+            _internal_priority: customHitPriority(result.type),
+            _internal_itemType: 'custom',
+            _internal_cursorStyle: result.cursorStyle,
+            _internal_externalId: result.objectId,
+            _internal_hitTestData: result.hitTestData,
+        };
+    }
     class SeriesCustomPaneView extends SeriesPaneViewBase {
         constructor(series, model, paneView) {
             super(series, model, false);
             this._private__paneView = paneView;
-            this._internal__renderer = new CustomSeriesPaneRendererWrapper(this._private__paneView.renderer(), (price) => {
-                const firstValue = series._internal_firstValue();
-                if (firstValue === null) {
-                    return null;
-                }
-                return series._internal_priceScale()._internal_priceToCoordinate(price, firstValue._internal_value);
-            });
+            this._private__sourceRenderer = this._private__paneView.renderer();
+            this._internal__renderer = new CustomSeriesPaneRendererWrapper(this._private__sourceRenderer, (price) => this._private__rendererPriceCoordinate(price));
+        }
+        get _internal_conflationReducer() {
+            // eslint-disable-next-line @typescript-eslint/unbound-method
+            return this._private__paneView.conflationReducer;
         }
         _internal_priceValueBuilder(plotRow) {
             return this._private__paneView.priceValueBuilder(plotRow);
@@ -11264,9 +12469,36 @@
         _internal_isWhitespace(data) {
             return this._private__paneView.isWhitespace(data);
         }
+        _internal__hitTestImpl(x, y) {
+            const customHit = this._private__sourceRenderer.hitTest?.(x, y, (price) => this._private__rendererPriceCoordinate(price));
+            if (customHit !== null && customHit !== undefined) {
+                return normalizeCustomHit(customHit);
+            }
+            const fallbackHit = hitTestSeriesRange(this._internal__items, this._internal__itemsVisibleRange, x, y, this._internal__model._internal_timeScale()._internal_barSpacing(), this._internal__series._internal_options().hitTestTolerance, (bar, out) => {
+                const originalData = bar._internal_originalData;
+                let top = NaN;
+                let bottom = NaN;
+                if (originalData !== undefined && !this._private__paneView.isWhitespace(originalData)) {
+                    for (const price of this._private__paneView.priceValueBuilder(originalData)) {
+                        const coordinate = this._private__rendererPriceCoordinate(price);
+                        if (coordinate === null) {
+                            continue;
+                        }
+                        top = Number.isNaN(top) ? coordinate : Math.min(top, coordinate);
+                        bottom = Number.isNaN(bottom) ? coordinate : Math.max(bottom, coordinate);
+                    }
+                }
+                out[0] = top;
+                out[1] = bottom;
+            });
+            return fallbackHit === null ? null : {
+                ...fallbackHit,
+                _internal_itemType: 'custom',
+            };
+        }
         _internal__fillRawPoints() {
             const colorer = this._internal__series._internal_barColorer();
-            this._internal__items = this._internal__series._internal_bars()._internal_rows()
+            this._internal__items = this._internal__series._internal_conflatedBars()._internal_rows()
                 .map((row) => {
                 return {
                     _internal_time: row._internal_index,
@@ -11284,7 +12516,15 @@
                 bars: this._internal__items.map(unwrapItemData),
                 barSpacing: this._internal__model._internal_timeScale()._internal_barSpacing(),
                 visibleRange: this._internal__itemsVisibleRange,
+                conflationFactor: this._internal__model._internal_timeScale()._internal_conflationFactor(),
             }, this._internal__series._internal_options());
+        }
+        _private__rendererPriceCoordinate(price) {
+            const firstValue = this._internal__series._internal_firstValue();
+            if (firstValue === null) {
+                return null;
+            }
+            return this._internal__series._internal_priceScale()._internal_priceToCoordinate(price, firstValue._internal_value);
         }
     }
     function unwrapItemData(item) {
@@ -11445,6 +12685,7 @@
             labelBackgroundColor: '#131722',
         },
         mode: 1 /* CrosshairMode.Magnet */,
+        doNotSnapToHiddenSeriesIndices: false,
     };
 
     const gridOptionsDefaults = {
@@ -11493,6 +12734,8 @@
             top: 0.2,
         },
         minimumWidth: 0,
+        ensureEdgeTickMarksVisible: false,
+        tickMarkDensity: 2.5,
     };
 
     const timeScaleOptionsDefaults = {
@@ -11516,10 +12759,16 @@
         minimumHeight: 0,
         allowBoldLabels: true,
         ignoreWhitespaceIndices: false,
+        enableConflation: false,
+        conflationThresholdFactor: 1,
+        precomputeConflationOnInit: false,
+        precomputeConflationPriority: 'background',
     };
 
     function chartOptionsDefaults() {
         return {
+            addDefaultPane: true,
+            hoveredSeriesOnTop: true,
             width: 0,
             height: 0,
             autoSize: false,
@@ -11537,6 +12786,7 @@
                 ...priceScaleOptionsDefaults,
                 visible: true,
             },
+            defaultVisiblePriceScaleId: 'right',
             timeScale: timeScaleOptionsDefaults,
             localization: {
                 locale: isRunningOnClientSide ? navigator.language : '',
@@ -11588,6 +12838,36 @@
             }
             return this._private__chartWidget._internal_getPriceAxisWidth(this._private__priceScaleId);
         }
+        setVisibleRange(range) {
+            this.setAutoScale(false);
+            this._private__priceScale()._internal_setCustomPriceRange(new PriceRangeImpl(range.from, range.to));
+        }
+        getVisibleRange() {
+            let range = this._private__priceScale()._internal_priceRange();
+            if (range === null) {
+                return null;
+            }
+            let from;
+            let to;
+            if (this._private__priceScale()._internal_isLog()) {
+                const minMove = this._private__priceScale()._internal_minMove();
+                const minMovePrecision = precisionByMinMove(minMove);
+                range = convertPriceRangeFromLog(range, this._private__priceScale()._internal_getLogFormula());
+                from = Number((Math.round(range._internal_minValue() / minMove) * minMove).toFixed(minMovePrecision));
+                to = Number((Math.round(range._internal_maxValue() / minMove) * minMove).toFixed(minMovePrecision));
+            }
+            else {
+                from = range._internal_minValue();
+                to = range._internal_maxValue();
+            }
+            return {
+                from,
+                to,
+            };
+        }
+        setAutoScale(on) {
+            this.applyOptions({ autoScale: on });
+        }
         _private__priceScale() {
             return ensureNotNull(this._private__chartWidget._internal_model()._internal_findPriceScale(this._private__priceScaleId, this._private__paneIndex))._internal_priceScale;
         }
@@ -11608,6 +12888,13 @@
             const paneIndex = chartModel._internal_getPaneIndex(this._private__pane);
             chartModel._internal_changePanesHeight(paneIndex, height);
         }
+        getStretchFactor() {
+            return this._private__pane._internal_stretchFactor();
+        }
+        setStretchFactor(stretchFactor) {
+            this._private__pane._internal_setStretchFactor(stretchFactor);
+            this._private__chartWidget._internal_model()._internal_fullUpdate();
+        }
         paneIndex() {
             return this._private__chartWidget._internal_model()._internal_getPaneIndex(this._private__pane);
         }
@@ -11617,13 +12904,17 @@
                 return;
             }
             assert(paneIndex >= 0 && paneIndex < this._private__chartWidget._internal_paneWidgets().length, 'Invalid pane index');
-            this._private__chartWidget._internal_model()._internal_swapPanes(currentIndex, paneIndex);
+            this._private__chartWidget._internal_model()._internal_movePane(currentIndex, paneIndex);
         }
         getSeries() {
             return this._private__pane._internal_series().map((source) => this._private__seriesApiGetter(source)) ?? [];
         }
         getHTMLElement() {
-            return this._private__chartWidget._internal_paneWidgets()[this.paneIndex()]._internal_getElement();
+            const widgets = this._private__chartWidget._internal_paneWidgets();
+            if (!widgets || widgets.length === 0 || !widgets[this.paneIndex()]) {
+                return null;
+            }
+            return widgets[this.paneIndex()]._internal_getElement();
         }
         attachPrimitive(primitive) {
             this._private__pane._internal_attachPrimitive(primitive);
@@ -11643,6 +12934,18 @@
                 throw new Error(`Cannot find price scale with id: ${priceScaleId}`);
             }
             return new PriceScaleApi(this._private__chartWidget, priceScaleId, this.paneIndex());
+        }
+        setPreserveEmptyPane(preserve) {
+            this._private__pane._internal_setPreserveEmptyPane(preserve);
+        }
+        preserveEmptyPane() {
+            return this._private__pane._internal_preserveEmptyPane();
+        }
+        addCustomSeries(customPaneView, options = {}, paneIndex = 0) {
+            return this._internal__chartApi.addCustomSeries(customPaneView, options, paneIndex);
+        }
+        addSeries(definition, options = {}) {
+            return this._internal__chartApi.addSeries(definition, options, this.paneIndex());
         }
     }
 
@@ -11814,6 +13117,14 @@
             this._internal__dataUpdatesConsumer._internal_updateData(this._internal__series, bar, historicalUpdate);
             this._private__onDataChanged('update');
         }
+        pop(count = 1) {
+            const poppedRows = this._internal__dataUpdatesConsumer._internal_popData(this._internal__series, count);
+            if (poppedRows.length !== 0) {
+                this._private__onDataChanged('update');
+            }
+            const creator = getSeriesDataCreator(this.seriesType());
+            return poppedRows.map((row) => creator(row));
+        }
         dataByIndex(logicalIndex, mismatchDirection) {
             const data = this._internal__series._internal_bars()._internal_search(logicalIndex, mismatchDirection);
             if (data === null) {
@@ -11858,6 +13169,19 @@
         seriesType() {
             return this._internal__series._internal_seriesType();
         }
+        lastValueData(globalLast) {
+            const result = this._internal__series._internal_lastValueData(globalLast);
+            if (result._internal_noData) {
+                return {
+                    noData: true,
+                };
+            }
+            return {
+                noData: false,
+                price: result._internal_price,
+                color: result._internal_color,
+            };
+        }
         attachPrimitive(primitive) {
             // at this point we cast the generic to unknown because we
             // don't want the model to know the types of the API (◑_◑)
@@ -11885,6 +13209,20 @@
         }
         moveToPane(paneIndex) {
             this._internal__series._internal_model()._internal_moveSeriesToPane(this._internal__series, paneIndex);
+        }
+        seriesOrder() {
+            const pane = this._internal__series._internal_model()._internal_paneForSource(this._internal__series);
+            if (pane === null) {
+                return -1;
+            }
+            return pane._internal_series().indexOf(this._internal__series);
+        }
+        setSeriesOrder(order) {
+            const pane = this._internal__series._internal_model()._internal_paneForSource(this._internal__series);
+            if (pane === null) {
+                return;
+            }
+            pane._internal_setSeriesOrder(this._internal__series, order);
         }
         _private__onDataChanged(scope) {
             if (this._private__dataChangedDelegate._internal_hasListeners()) {
@@ -12182,6 +13520,13 @@
         _internal_updateData(series, data, historicalUpdate) {
             this._private__sendUpdateToChart(this._private__dataLayer._internal_updateSeriesData(series, data, historicalUpdate));
         }
+        _internal_popData(series, count) {
+            const [poppedData, update] = this._private__dataLayer._internal_popSeriesData(series, count);
+            if (poppedData.length !== 0) {
+                this._private__sendUpdateToChart(update);
+            }
+            return poppedData;
+        }
         subscribeClick(handler) {
             this._private__clickedDelegate._internal_subscribe(handler);
         }
@@ -12222,8 +13567,35 @@
         options() {
             return this._private__chartWidget._internal_options();
         }
-        takeScreenshot() {
-            return this._private__chartWidget._internal_takeScreenshot();
+        takeScreenshot(addTopLayer = false, includeCrosshair = false) {
+            let crosshairMode;
+            let screenshotCanvas;
+            try {
+                if (!includeCrosshair) {
+                    crosshairMode = this._private__chartWidget._internal_model()._internal_options().crosshair.mode;
+                    this._private__chartWidget._internal_applyOptions({
+                        crosshair: {
+                            mode: 2 /* CrosshairMode.Hidden */,
+                        },
+                    });
+                }
+                screenshotCanvas = this._private__chartWidget._internal_takeScreenshot(addTopLayer);
+            }
+            finally {
+                if (!includeCrosshair && crosshairMode !== undefined) {
+                    this._private__chartWidget._internal_model()._internal_applyOptions({
+                        crosshair: {
+                            mode: crosshairMode,
+                        },
+                    });
+                }
+            }
+            return screenshotCanvas;
+        }
+        addPane(preserveEmptyPane = false) {
+            const pane = this._private__chartWidget._internal_model()._internal_addPane();
+            pane._internal_setPreserveEmptyPane(preserveEmptyPane);
+            return this._private__getPaneApi(pane);
         }
         removePane(index) {
             this._private__chartWidget._internal_model()._internal_removePane(index);
@@ -12289,6 +13661,9 @@
         _private__mapSeriesToApi(series) {
             return ensureDefined(this._private__seriesMapReversed.get(series));
         }
+        _private__resolveSeriesApi(series) {
+            return series !== undefined && this._private__seriesMapReversed.has(series) ? this._private__mapSeriesToApi(series) : undefined;
+        }
         _private__convertMouseParams(param) {
             const seriesData = new Map();
             param._internal_seriesData.forEach((plotRow, series) => {
@@ -12303,15 +13678,23 @@
                 }
                 seriesData.set(this._private__mapSeriesToApi(series), data);
             });
-            const hoveredSeries = param._internal_hoveredSeries === undefined ||
-                !this._private__seriesMapReversed.has(param._internal_hoveredSeries)
+            const hoveredSeries = this._private__resolveSeriesApi(param._internal_hoveredSeries);
+            const hoveredInfo = param._internal_hoveredInfo === undefined
                 ? undefined
-                : this._private__mapSeriesToApi(param._internal_hoveredSeries);
+                : {
+                    type: param._internal_hoveredInfo._internal_type,
+                    sourceKind: param._internal_hoveredInfo._internal_sourceKind,
+                    objectKind: param._internal_hoveredInfo._internal_objectKind,
+                    series: this._private__resolveSeriesApi(param._internal_hoveredInfo._internal_series),
+                    objectId: param._internal_hoveredInfo._internal_objectId,
+                    paneIndex: param._internal_hoveredInfo._internal_paneIndex,
+                };
             return {
                 time: param._internal_originalTime,
                 logical: param._internal_index,
                 point: param._internal_point,
                 paneIndex: param._internal_paneIndex,
+                hoveredInfo,
                 hoveredSeries,
                 hoveredObjectId: param._internal_hoveredObject,
                 seriesData,
@@ -12376,31 +13759,6 @@
         return HorzScaleBehaviorTime;
     }
 
-    class LinePaneViewBase extends SeriesPaneViewBase {
-        constructor(series, model) {
-            super(series, model, true);
-        }
-        _internal__convertToCoordinates(priceScale, timeScale, firstValue) {
-            timeScale._internal_indexesToCoordinates(this._internal__items, undefinedIfNull(this._internal__itemsVisibleRange));
-            priceScale._internal_pointsArrayToCoordinates(this._internal__items, firstValue, undefinedIfNull(this._internal__itemsVisibleRange));
-        }
-        _internal__createRawItemBase(time, price) {
-            return {
-                _internal_time: time,
-                _internal_price: price,
-                _internal_x: NaN,
-                _internal_y: NaN,
-            };
-        }
-        _internal__fillRawPoints() {
-            const colorer = this._internal__series._internal_barColorer();
-            this._internal__items = this._internal__series._internal_bars()._internal_rows().map((row) => {
-                const value = row._internal_value[3 /* PlotRowValueIndex.Close */];
-                return this._internal__createRawItem(row._internal_index, value, colorer);
-            });
-        }
-    }
-
     function drawSeriesPointMarkers(renderingScope, items, pointMarkersRadius, visibleRange, 
     // the values returned by styleGetter are compared using the operator !==,
     // so if styleGetter returns objects, then styleGetter should return the same object for equal styles
@@ -12418,10 +13776,10 @@
             if (point) {
                 const style = styleGetter(renderingScope, point);
                 if (style !== prevStyle) {
-                    context.beginPath();
                     if (prevStyle !== null) {
                         context.fill();
                     }
+                    context.beginPath();
                     context.fillStyle = style;
                     prevStyle = style;
                 }
@@ -12434,11 +13792,14 @@
         context.fill();
     }
 
+    function distanceByCoordinates(p1x, p1y, p2x, p2y) {
+        return Math.hypot(p2x - p1x, p2y - p1y);
+    }
     // eslint-disable-next-line max-params, complexity
     function walkLine(renderingScope, items, lineType, visibleRange, barWidth, 
     // the values returned by styleGetter are compared using the operator !==,
     // so if styleGetter returns objects, then styleGetter should return the same object for equal styles
-    styleGetter, finishStyledArea) {
+    styleGetter, finishStyledArea, dashPatternLength = 0) {
         if (items.length === 0 || visibleRange.from >= items.length || visibleRange.to <= 0) {
             return;
         }
@@ -12456,43 +13817,86 @@
             finishStyledArea(renderingScope, currentStyle, item1, item2);
         }
         else {
+            const shouldTrackDashOffset = dashPatternLength > 0;
+            let accumulatedDistance = 0;
             const changeStyle = (newStyle, currentItem) => {
                 finishStyledArea(renderingScope, currentStyle, currentStyleFirstItem, currentItem);
                 ctx.beginPath();
                 currentStyle = newStyle;
                 currentStyleFirstItem = currentItem;
+                if (shouldTrackDashOffset) {
+                    const offset = accumulatedDistance % dashPatternLength;
+                    ctx.lineDashOffset = offset;
+                    // reset to the remainder to avoid floating-point precision drift over very long series.
+                    accumulatedDistance = offset;
+                }
             };
             let currentItem = currentStyleFirstItem;
             ctx.beginPath();
             ctx.moveTo(firstItem._internal_x * horizontalPixelRatio, firstItem._internal_y * verticalPixelRatio);
             for (let i = visibleRange.from + 1; i < visibleRange.to; ++i) {
                 currentItem = items[i];
+                const currentX = currentItem._internal_x * horizontalPixelRatio;
+                const currentY = currentItem._internal_y * verticalPixelRatio;
                 const itemStyle = styleGetter(renderingScope, currentItem);
                 switch (lineType) {
-                    case 0 /* LineType.Simple */:
-                        ctx.lineTo(currentItem._internal_x * horizontalPixelRatio, currentItem._internal_y * verticalPixelRatio);
+                    case 0 /* LineType.Simple */: {
+                        ctx.lineTo(currentX, currentY);
+                        if (shouldTrackDashOffset) {
+                            const prevItem = items[i - 1];
+                            const prevX = prevItem._internal_x * horizontalPixelRatio;
+                            const prevY = prevItem._internal_y * verticalPixelRatio;
+                            accumulatedDistance += distanceByCoordinates(prevX, prevY, currentX, currentY);
+                        }
                         break;
-                    case 1 /* LineType.WithSteps */:
-                        ctx.lineTo(currentItem._internal_x * horizontalPixelRatio, items[i - 1]._internal_y * verticalPixelRatio);
+                    }
+                    case 1 /* LineType.WithSteps */: {
+                        const prevItem = items[i - 1];
+                        const prevY = prevItem._internal_y * verticalPixelRatio;
+                        ctx.lineTo(currentX, prevY);
+                        if (shouldTrackDashOffset) {
+                            accumulatedDistance += Math.abs(currentItem._internal_x - prevItem._internal_x) * horizontalPixelRatio;
+                        }
                         if (itemStyle !== currentStyle) {
                             changeStyle(itemStyle, currentItem);
-                            ctx.lineTo(currentItem._internal_x * horizontalPixelRatio, items[i - 1]._internal_y * verticalPixelRatio);
+                            ctx.lineTo(currentX, prevY);
                         }
-                        ctx.lineTo(currentItem._internal_x * horizontalPixelRatio, currentItem._internal_y * verticalPixelRatio);
+                        ctx.lineTo(currentX, currentY);
+                        if (shouldTrackDashOffset) {
+                            accumulatedDistance += Math.abs(currentItem._internal_y - prevItem._internal_y) * verticalPixelRatio;
+                        }
                         break;
+                    }
                     case 2 /* LineType.Curved */: {
                         const [cp1, cp2] = getControlPoints(items, i - 1, i);
-                        ctx.bezierCurveTo(cp1._internal_x * horizontalPixelRatio, cp1._internal_y * verticalPixelRatio, cp2._internal_x * horizontalPixelRatio, cp2._internal_y * verticalPixelRatio, currentItem._internal_x * horizontalPixelRatio, currentItem._internal_y * verticalPixelRatio);
+                        const cp1x = cp1._internal_x * horizontalPixelRatio;
+                        const cp1y = cp1._internal_y * verticalPixelRatio;
+                        const cp2x = cp2._internal_x * horizontalPixelRatio;
+                        const cp2y = cp2._internal_y * verticalPixelRatio;
+                        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, currentX, currentY);
+                        if (shouldTrackDashOffset) {
+                            const prevItem = items[i - 1];
+                            const prevX = prevItem._internal_x * horizontalPixelRatio;
+                            const prevY = prevItem._internal_y * verticalPixelRatio;
+                            const chord = distanceByCoordinates(prevX, prevY, currentX, currentY);
+                            const controlPolygon = distanceByCoordinates(prevX, prevY, cp1x, cp1y) +
+                                distanceByCoordinates(cp1x, cp1y, cp2x, cp2y) +
+                                distanceByCoordinates(cp2x, cp2y, currentX, currentY);
+                            accumulatedDistance += (chord + controlPolygon) / 2;
+                        }
                         break;
                     }
                 }
                 if (lineType !== 1 /* LineType.WithSteps */ && itemStyle !== currentStyle) {
                     changeStyle(itemStyle, currentItem);
-                    ctx.moveTo(currentItem._internal_x * horizontalPixelRatio, currentItem._internal_y * verticalPixelRatio);
+                    ctx.moveTo(currentX, currentY);
                 }
             }
             if (currentStyleFirstItem !== currentItem || currentStyleFirstItem === currentItem && lineType === 1 /* LineType.WithSteps */) {
                 finishStyledArea(renderingScope, currentStyle, currentStyleFirstItem, currentItem);
+            }
+            if (shouldTrackDashOffset) {
+                ctx.lineDashOffset = 0;
             }
         }
     }
@@ -12541,11 +13945,12 @@
             const ctx = renderingScope.context;
             ctx.lineCap = 'butt';
             ctx.lineWidth = lineWidth * renderingScope.verticalPixelRatio;
-            setLineStyle(ctx, lineStyle);
+            const dashPattern = setLineStyle(ctx, lineStyle);
             ctx.lineJoin = 'round';
             const styleGetter = this._internal__strokeStyle.bind(this);
+            const dashPatternLength = getDashPatternLength(dashPattern);
             if (lineType !== undefined) {
-                walkLine(renderingScope, items, lineType, visibleRange, barWidth, styleGetter, finishStyledArea$1);
+                walkLine(renderingScope, items, lineType, visibleRange, barWidth, styleGetter, finishStyledArea$1, dashPatternLength);
             }
             if (pointMarkersRadius) {
                 drawSeriesPointMarkers(renderingScope, items, pointMarkersRadius, visibleRange, styleGetter);
@@ -12559,7 +13964,169 @@
         }
     }
 
-    class SeriesLinePaneView extends LinePaneViewBase {
+    const BEZIER_APPROXIMATION_STEPS = 12;
+    function cubicBezierPoint(p0, p1, p2, p3, t) {
+        const u = 1 - t;
+        return u * u * u * p0
+            + 3 * u * u * t * p1
+            + 3 * u * t * t * p2
+            + t * t * t * p3;
+    }
+    function distanceToBezierCurve(x, y, points) {
+        let minDistance = Number.POSITIVE_INFINITY;
+        let previousPoint = points[0];
+        for (let step = 1; step <= BEZIER_APPROXIMATION_STEPS; step++) {
+            const t = step / BEZIER_APPROXIMATION_STEPS;
+            const currentPoint = {
+                _internal_x: cubicBezierPoint(points[0]._internal_x, points[1]._internal_x, points[2]._internal_x, points[3]._internal_x, t),
+                _internal_y: cubicBezierPoint(points[0]._internal_y, points[1]._internal_y, points[2]._internal_y, points[3]._internal_y, t),
+            };
+            minDistance = Math.min(minDistance, distanceToSegment(x, y, previousPoint._internal_x, previousPoint._internal_y, currentPoint._internal_x, currentPoint._internal_y));
+            previousPoint = currentPoint;
+        }
+        return minDistance;
+    }
+    function lineSegmentHorizontalBounds(firstItem, secondItem, lineType, items, toItemIndex) {
+        switch (lineType) {
+            case 2 /* LineType.Curved */: {
+                const [firstControlPoint, secondControlPoint] = getControlPoints(items, toItemIndex - 1, toItemIndex);
+                const minX = Math.min(firstItem._internal_x, secondItem._internal_x, firstControlPoint._internal_x, secondControlPoint._internal_x);
+                const maxX = Math.max(firstItem._internal_x, secondItem._internal_x, firstControlPoint._internal_x, secondControlPoint._internal_x);
+                return [minX, maxX];
+            }
+            case 1 /* LineType.WithSteps */:
+            case 0 /* LineType.Simple */:
+            default: {
+                const minX = Math.min(firstItem._internal_x, secondItem._internal_x);
+                const maxX = Math.max(firstItem._internal_x, secondItem._internal_x);
+                return [minX, maxX];
+            }
+        }
+    }
+    // eslint-disable-next-line max-params
+    function hitTestLineSegment(x, y, firstItem, secondItem, lineType, items, toItemIndex, radius) {
+        switch (lineType) {
+            case 1 /* LineType.WithSteps */:
+                {
+                    const horizontalDistance = distanceToSegment(x, y, firstItem._internal_x, firstItem._internal_y, secondItem._internal_x, firstItem._internal_y);
+                    const verticalDistance = distanceToSegment(x, y, secondItem._internal_x, firstItem._internal_y, secondItem._internal_x, secondItem._internal_y);
+                    const minDistance = Math.min(horizontalDistance, verticalDistance);
+                    return minDistance <= radius ? minDistance : null;
+                }
+            case 2 /* LineType.Curved */: {
+                const [firstControlPoint, secondControlPoint] = getControlPoints(items, toItemIndex - 1, toItemIndex);
+                const distance = distanceToBezierCurve(x, y, [firstItem, firstControlPoint, secondControlPoint, secondItem]);
+                return distance <= radius ? distance : null;
+            }
+            case 0 /* LineType.Simple */:
+            default:
+                {
+                    const distance = distanceToSegment(x, y, firstItem._internal_x, firstItem._internal_y, secondItem._internal_x, secondItem._internal_y);
+                    return distance <= radius ? distance : null;
+                }
+        }
+    }
+    // eslint-disable-next-line max-params, complexity
+    function hitTestLineSeries(items, visibleRange, x, y, lineType, lineWidth, pointMarkersRadius, barSpacing = 0, hitTestTolerance = 0) {
+        if (visibleRange === null || visibleRange.from >= visibleRange.to || items.length === 0) {
+            return null;
+        }
+        const radius = Math.max(lineWidth / 2, pointMarkersRadius ?? 0) + hitTestTolerance;
+        let pointMinDistance = Number.POSITIVE_INFINITY;
+        if (pointMarkersRadius !== undefined) {
+            const pointRadius = pointMarkersRadius + hitTestTolerance;
+            const pointCandidateFrom = lowerBoundByX(items, x - pointRadius, visibleRange.from, visibleRange.to);
+            const pointCandidateTo = upperBoundByX(items, x + pointRadius, pointCandidateFrom, visibleRange.to);
+            for (let itemIndex = pointCandidateFrom; itemIndex < pointCandidateTo; itemIndex++) {
+                const item = items[itemIndex];
+                if (!isWithinHorizontalSweep(x, item._internal_x, item._internal_x, pointMarkersRadius + hitTestTolerance)) {
+                    continue;
+                }
+                const distance = Math.hypot(x - item._internal_x, y - item._internal_y);
+                if (distance <= pointMarkersRadius + hitTestTolerance) {
+                    pointMinDistance = Math.min(pointMinDistance, distance);
+                }
+            }
+        }
+        if (visibleRange.to - visibleRange.from < 2) {
+            const item = items[visibleRange.from];
+            const singlePointHalfWidth = Math.max(barSpacing / 2, radius);
+            const distance = distanceToSegment(x, y, item._internal_x - singlePointHalfWidth, item._internal_y, item._internal_x + singlePointHalfWidth, item._internal_y);
+            if (distance <= radius) {
+                pointMinDistance = Math.min(pointMinDistance, distance);
+            }
+            return Number.isFinite(pointMinDistance) ? hoveredSeriesHitTestResult(pointMinDistance, 2 /* HitTestPriority.Point */, 'series-point') : null;
+        }
+        let lineMinDistance = Number.POSITIVE_INFINITY;
+        const lineCandidateFrom = lowerBoundByX(items, x - radius, visibleRange.from, visibleRange.to);
+        const lineCandidateTo = upperBoundByX(items, x + radius, lineCandidateFrom, visibleRange.to);
+        const segmentFrom = Math.max(visibleRange.from + 1, lineCandidateFrom);
+        const segmentTo = Math.min(visibleRange.to, lineCandidateTo + 1);
+        for (let itemIndex = segmentFrom; itemIndex < segmentTo; itemIndex++) {
+            const previousItem = items[itemIndex - 1];
+            const currentItem = items[itemIndex];
+            const [leftX, rightX] = lineSegmentHorizontalBounds(previousItem, currentItem, lineType, items, itemIndex);
+            if (!isWithinHorizontalSweep(x, leftX, rightX, radius)) {
+                continue;
+            }
+            const distance = hitTestLineSegment(x, y, previousItem, currentItem, lineType, items, itemIndex, radius);
+            if (distance !== null) {
+                lineMinDistance = Math.min(lineMinDistance, distance);
+            }
+        }
+        if (Number.isFinite(pointMinDistance)) {
+            return hoveredSeriesHitTestResult(pointMinDistance, 2 /* HitTestPriority.Point */, 'series-point');
+        }
+        return Number.isFinite(lineMinDistance) ? hoveredSeriesHitTestResult(lineMinDistance, 1 /* HitTestPriority.Line */, 'series-line') : null;
+    }
+
+    class LinePaneViewBase extends SeriesPaneViewBase {
+        constructor(series, model) {
+            super(series, model, true);
+        }
+        _internal__convertToCoordinates(priceScale, timeScale, firstValue) {
+            timeScale._internal_indexesToCoordinates(this._internal__items, undefinedIfNull(this._internal__itemsVisibleRange));
+            priceScale._internal_pointsArrayToCoordinates(this._internal__items, firstValue, undefinedIfNull(this._internal__itemsVisibleRange));
+        }
+        _internal__createRawItemBase(time, price) {
+            return {
+                _internal_time: time,
+                _internal_price: price,
+                _internal_x: NaN,
+                _internal_y: NaN,
+            };
+        }
+        _internal__fillRawPoints() {
+            const colorer = this._internal__series._internal_barColorer();
+            this._internal__items = this._internal__series._internal_conflatedBars()._internal_rows().map((row) => {
+                const isConflated = (row._internal_originalDataCount ?? 1) > 1;
+                let value;
+                if (isConflated) {
+                    const high = row._internal_value[1 /* PlotRowValueIndex.High */];
+                    const low = row._internal_value[2 /* PlotRowValueIndex.Low */];
+                    const close = row._internal_value[3 /* PlotRowValueIndex.Close */];
+                    const highMove = Math.abs(high - close);
+                    const lowMove = Math.abs(low - close);
+                    // in case of conflation we want to show more extreme price to represent the range
+                    // and we choose the one which is further from the close price
+                    value = (highMove > lowMove) ? high : low;
+                }
+                else {
+                    value = row._internal_value[3 /* PlotRowValueIndex.Close */];
+                }
+                return this._internal__createRawItem(row._internal_index, value, colorer);
+            });
+        }
+    }
+
+    class LineHitTestPaneViewBase extends LinePaneViewBase {
+        _internal__hitTestImpl(x, y) {
+            const options = this._internal__series._internal_options();
+            return hitTestLineSeries(this._internal__items, this._internal__itemsVisibleRange, x, y, options.lineType, options.lineVisible ? options.lineWidth : 1, options.pointMarkersVisible ? (options.pointMarkersRadius || options.lineWidth / 2 + 2) : undefined, this._internal__model._internal_timeScale()._internal_barSpacing(), options.hitTestTolerance);
+        }
+    }
+
+    class SeriesLinePaneView extends LineHitTestPaneViewBase {
         constructor() {
             super(...arguments);
             this._internal__renderer = new PaneRendererLine();
@@ -13033,7 +14600,7 @@
         }
     }
 
-    class SeriesBaselinePaneView extends LinePaneViewBase {
+    class SeriesBaselinePaneView extends LineHitTestPaneViewBase {
         constructor(series, model) {
             super(series, model);
             this._internal__renderer = new CompositeRenderer();
@@ -13156,7 +14723,7 @@
         }
     }
 
-    class SeriesAreaPaneView extends LinePaneViewBase {
+    class SeriesAreaPaneView extends LineHitTestPaneViewBase {
         constructor(series, model) {
             super(series, model);
             this._internal__renderer = new CompositeRenderer();
@@ -13340,6 +14907,12 @@
         constructor(series, model) {
             super(series, model, false);
         }
+        _internal__hitTestImpl(x, y) {
+            return hitTestSeriesRange(this._internal__items, this._internal__itemsVisibleRange, x, y, this._internal__model._internal_timeScale()._internal_barSpacing(), this._internal__series._internal_options().hitTestTolerance, (bar, out) => {
+                out[0] = bar._internal_highY;
+                out[1] = bar._internal_lowY;
+            });
+        }
         _internal__convertToCoordinates(priceScale, timeScale, firstValue) {
             timeScale._internal_indexesToCoordinates(this._internal__items, undefinedIfNull(this._internal__itemsVisibleRange));
             priceScale._internal_barPricesToCoordinates(this._internal__items, firstValue, undefinedIfNull(this._internal__itemsVisibleRange));
@@ -13360,7 +14933,7 @@
         }
         _internal__fillRawPoints() {
             const colorer = this._internal__series._internal_barColorer();
-            this._internal__items = this._internal__series._internal_bars()._internal_rows().map((row) => this._internal__createRawItem(row._internal_index, row, colorer));
+            this._internal__items = this._internal__series._internal_conflatedBars()._internal_rows().map((row) => this._internal__createRawItem(row._internal_index, row, colorer));
         }
     }
 
@@ -13733,6 +15306,16 @@
             super(...arguments);
             this._internal__renderer = new PaneRendererHistogram();
         }
+        _internal__hitTestImpl(x, y) {
+            const histogramBase = this._internal__series._internal_priceScale()._internal_priceToCoordinate(this._internal__series._internal_options().base, ensureNotNull(this._internal__series._internal_firstValue())._internal_value);
+            if (histogramBase === null) {
+                return null;
+            }
+            return hitTestSeriesRange(this._internal__items, this._internal__itemsVisibleRange, x, y, this._internal__model._internal_timeScale()._internal_barSpacing(), this._internal__series._internal_options().hitTestTolerance, (item, out) => {
+                out[0] = item._internal_y;
+                out[1] = histogramBase;
+            });
+        }
         _internal__createRawItem(time, price, colorer) {
             return {
                 ...this._internal__createRawItemBase(time, price),
@@ -13921,7 +15504,7 @@
             ...options,
         };
     }
-    function mergeOptionsWithDefaults$1(options) {
+    function mergeOptionsWithDefaults$2(options) {
         return {
             ...textWatermarkOptionsDefaults,
             ...options,
@@ -13930,7 +15513,7 @@
     }
     class TextWatermark {
         constructor(options) {
-            this._private__options = mergeOptionsWithDefaults$1(options);
+            this._private__options = mergeOptionsWithDefaults$2(options);
             this._private__paneViews = [new TextWatermarkPaneView(this._private__options)];
         }
         updateAllViews() {
@@ -13946,7 +15529,7 @@
             this._internal_requestUpdate = undefined;
         }
         _internal_applyOptions(options) {
-            this._private__options = mergeOptionsWithDefaults$1({ ...this._private__options, ...options });
+            this._private__options = mergeOptionsWithDefaults$2({ ...this._private__options, ...options });
             if (this._internal_requestUpdate) {
                 this._internal_requestUpdate();
             }
@@ -14086,7 +15669,7 @@
         };
     }
 
-    function mergeOptionsWithDefaults(options) {
+    function mergeOptionsWithDefaults$1(options) {
         return {
             ...imageWatermarkOptionsDefaults,
             ...options,
@@ -14096,7 +15679,7 @@
         constructor(imageUrl, options) {
             this._private__imgElement = null;
             this._private__imageUrl = imageUrl;
-            this._private__options = mergeOptionsWithDefaults(options);
+            this._private__options = mergeOptionsWithDefaults$1(options);
             this._private__paneViews = [new ImageWatermarkPaneView(this._private__options)];
         }
         updateAllViews() {
@@ -14128,7 +15711,7 @@
             this._private__imgElement = null;
         }
         _internal_applyOptions(options) {
-            this._private__options = mergeOptionsWithDefaults({ ...this._private__options, ...options });
+            this._private__options = mergeOptionsWithDefaults$1({ ...this._private__options, ...options });
             this._private__updateOptions();
             if (this._internal_requestUpdate) {
                 this._internal_requestUpdate();
@@ -14192,6 +15775,11 @@
             this._internal__series.attachPrimitive(this._internal__primitive);
         }
     }
+
+    const seriesMarkerOptionsDefaults = {
+        autoScale: true,
+        zOrder: 'normal',
+    };
 
     function size(barSpacing, coeff) {
         const result = Math.min(Math.max(barSpacing, 12 /* Constants.MinShapeSize */), 30 /* Constants.MaxShapeSize */) * coeff;
@@ -14334,17 +15922,19 @@
             this._private__fontSize = -1;
             this._private__fontFamily = '';
             this._private__font = '';
+            this._private__zOrder = 'normal';
         }
         _internal_setData(data) {
             this._private__data = data;
         }
-        _internal_setParams(fontSize, fontFamily) {
+        _internal_setParams(fontSize, fontFamily, zOrder) {
             if (this._private__fontSize !== fontSize || this._private__fontFamily !== fontFamily) {
                 this._private__fontSize = fontSize;
                 this._private__fontFamily = fontFamily;
                 this._private__font = makeFont(fontSize, fontFamily);
                 this._private__textWidthCache._internal_reset();
             }
+            this._private__zOrder = zOrder;
         }
         _internal_hitTest(x, y) {
             if (this._private__data === null || this._private__data._internal_visibleRange === null) {
@@ -14356,12 +15946,24 @@
                     return {
                         zOrder: 'normal',
                         externalId: item._internal_externalId ?? '',
+                        itemType: 'marker',
                     };
                 }
             }
             return null;
         }
         draw(target) {
+            if (this._private__zOrder === 'aboveSeries') {
+                return;
+            }
+            target.useBitmapCoordinateSpace((scope) => {
+                this._internal__drawImpl(scope);
+            });
+        }
+        drawBackground(target) {
+            if (this._private__zOrder !== 'aboveSeries') {
+                return;
+            }
             target.useBitmapCoordinateSpace((scope) => {
                 this._internal__drawImpl(scope);
             });
@@ -14441,57 +16043,84 @@
         }
     }
 
-    // eslint-disable-next-line max-params
-    function fillSizeAndY(rendererItem, marker, seriesData, offsets, textHeight, shapeMargin, series, chart) {
-        const timeScale = chart.timeScale();
-        let inBarPrice;
-        let highPrice;
-        let lowPrice;
+    function isPriceMarker(position) {
+        return position === 'atPriceTop' || position === 'atPriceBottom' || position === 'atPriceMiddle';
+    }
+    function getPrice(seriesData, marker, isInverted) {
+        if (isPriceMarker(marker.position) && marker.price !== undefined) {
+            return marker.price;
+        }
         if (isValueData(seriesData)) {
-            inBarPrice = seriesData.value;
-            highPrice = seriesData.value;
-            lowPrice = seriesData.value;
+            return seriesData.value;
         }
-        else if (isOhlcData(seriesData)) {
-            inBarPrice = seriesData.close;
-            highPrice = seriesData.high;
-            lowPrice = seriesData.low;
+        if (isOhlcData(seriesData)) {
+            if (marker.position === 'inBar') {
+                return seriesData.close;
+            }
+            if (marker.position === 'aboveBar') {
+                if (!isInverted) {
+                    return seriesData.high;
+                }
+                return seriesData.low;
+            }
+            if (marker.position === 'belowBar') {
+                if (!isInverted) {
+                    return seriesData.low;
+                }
+                return seriesData.high;
+            }
         }
-        else {
+        return;
+    }
+    // eslint-disable-next-line max-params, complexity
+    function fillSizeAndY(rendererItem, marker, seriesData, offsets, textHeight, shapeMargin, series, chart) {
+        const price = getPrice(seriesData, marker, series.priceScale().options().invertScale);
+        if (price === undefined) {
             return;
         }
+        const ignoreOffset = isPriceMarker(marker.position);
+        const timeScale = chart.timeScale();
         const sizeMultiplier = isNumber(marker.size) ? Math.max(marker.size, 0) : 1;
         const shapeSize = calculateShapeHeight(timeScale.options().barSpacing) * sizeMultiplier;
         const halfSize = shapeSize / 2;
         rendererItem._internal_size = shapeSize;
-        switch (marker.position) {
-            case 'inBar': {
-                rendererItem._internal_y = ensureNotNull(series.priceToCoordinate(inBarPrice));
+        const position = marker.position;
+        switch (position) {
+            case 'inBar':
+            case 'atPriceMiddle': {
+                rendererItem._internal_y = ensureNotNull(series.priceToCoordinate(price));
                 if (rendererItem._internal_text !== undefined) {
                     rendererItem._internal_text._internal_y = rendererItem._internal_y + halfSize + shapeMargin + textHeight * (0.5 + 0.1 /* Constants.TextMargin */);
                 }
                 return;
             }
-            case 'aboveBar': {
-                rendererItem._internal_y = (ensureNotNull(series.priceToCoordinate(highPrice)) - halfSize - offsets._internal_aboveBar);
+            case 'aboveBar':
+            case 'atPriceTop': {
+                const offset = ignoreOffset ? 0 : offsets._internal_aboveBar;
+                rendererItem._internal_y = (ensureNotNull(series.priceToCoordinate(price)) - halfSize - offset);
                 if (rendererItem._internal_text !== undefined) {
                     rendererItem._internal_text._internal_y = rendererItem._internal_y - halfSize - textHeight * (0.5 + 0.1 /* Constants.TextMargin */);
                     offsets._internal_aboveBar += textHeight * (1 + 2 * 0.1 /* Constants.TextMargin */);
                 }
-                offsets._internal_aboveBar += shapeSize + shapeMargin;
+                if (!ignoreOffset) {
+                    offsets._internal_aboveBar += shapeSize + shapeMargin;
+                }
                 return;
             }
-            case 'belowBar': {
-                rendererItem._internal_y = (ensureNotNull(series.priceToCoordinate(lowPrice)) + halfSize + offsets._internal_belowBar);
+            case 'belowBar':
+            case 'atPriceBottom': {
+                const offset = ignoreOffset ? 0 : offsets._internal_belowBar;
+                rendererItem._internal_y = (ensureNotNull(series.priceToCoordinate(price)) + halfSize + offset);
                 if (rendererItem._internal_text !== undefined) {
-                    rendererItem._internal_text._internal_y = rendererItem._internal_y + halfSize + shapeMargin + textHeight * (0.5 + 0.1 /* Constants.TextMargin */);
+                    rendererItem._internal_text._internal_y = (rendererItem._internal_y + halfSize + shapeMargin + textHeight * (0.5 + 0.1 /* Constants.TextMargin */));
                     offsets._internal_belowBar += textHeight * (1 + 2 * 0.1 /* Constants.TextMargin */);
                 }
-                offsets._internal_belowBar += shapeSize + shapeMargin;
+                if (!ignoreOffset) {
+                    offsets._internal_belowBar += shapeSize + shapeMargin;
+                }
                 return;
             }
         }
-        ensureNever(marker.position);
     }
     function isValueData(data) {
         // eslint-disable-next-line no-restricted-syntax
@@ -14502,7 +16131,7 @@
         return 'open' in data && 'high' in data && 'low' in data && 'close' in data;
     }
     class SeriesMarkersPaneView {
-        constructor(series, chart) {
+        constructor(series, chart, options) {
             this._private__markers = [];
             this._private__invalidated = true;
             this._private__dataInvalidated = true;
@@ -14513,6 +16142,7 @@
                 _internal_items: [],
                 _internal_visibleRange: null,
             };
+            this._private__options = options;
         }
         renderer() {
             if (!this._private__series.options().visible) {
@@ -14522,7 +16152,7 @@
                 this._internal__makeValid();
             }
             const layout = this._private__chart.options()['layout'];
-            this._private__renderer._internal_setParams(layout.fontSize, layout.fontFamily);
+            this._private__renderer._internal_setParams(layout.fontSize, layout.fontFamily, this._private__options.zOrder);
             this._private__renderer._internal_setData(this._private__data);
             return this._private__renderer;
         }
@@ -14535,6 +16165,13 @@
             if (updateType === 'data') {
                 this._private__dataInvalidated = true;
             }
+        }
+        _internal_updateOptions(options) {
+            this._private__invalidated = true;
+            this._private__options = options;
+        }
+        zOrder() {
+            return this._private__options.zOrder === 'aboveSeries' ? 'top' : this._private__options.zOrder;
         }
         _internal__makeValid() {
             const timeScale = this._private__chart.timeScale();
@@ -14593,7 +16230,7 @@
                         _internal_height: 0,
                     };
                 }
-                const dataAt = ensureNotNull(this._private__series.dataByIndex(marker.time, -1));
+                const dataAt = this._private__series.dataByIndex(marker.time, 0 /* MismatchDirection.None */);
                 if (dataAt === null) {
                     continue;
                 }
@@ -14603,8 +16240,14 @@
         }
     }
 
+    function mergeOptionsWithDefaults(options) {
+        return {
+            ...seriesMarkerOptionsDefaults,
+            ...options,
+        };
+    }
     class SeriesMarkersPrimitive {
-        constructor() {
+        constructor(options) {
             this._private__paneView = null;
             this._private__markers = [];
             this._private__indexedMarkers = [];
@@ -14615,14 +16258,17 @@
             this._private__autoScaleMargins = null;
             this._private__markersPositions = null;
             this._private__cachedBarSpacing = null;
+            this._private__recalculationRequired = true;
+            this._private__options = mergeOptionsWithDefaults(options);
         }
         attached(param) {
             this._private__recalculateMarkers();
             this._private__chart = param.chart;
             this._private__series = param.series;
-            this._private__paneView = new SeriesMarkersPaneView(this._private__series, ensureNotNull(this._private__chart));
+            this._private__paneView = new SeriesMarkersPaneView(this._private__series, ensureNotNull(this._private__chart), this._private__options);
             this._private__requestUpdate = param.requestUpdate;
             this._private__series.subscribeDataChanged((scope) => this._private__onDataChanged(scope));
+            this._private__recalculationRequired = true;
             this._internal_requestUpdate();
         }
         _internal_requestUpdate() {
@@ -14640,6 +16286,7 @@
             this._private__dataChangedHandler = null;
         }
         _internal_setMarkers(markers) {
+            this._private__recalculationRequired = true;
             this._private__markers = markers;
             this._private__recalculateMarkers();
             this._private__autoScaleMarginsInvalidated = true;
@@ -14662,7 +16309,7 @@
             return null;
         }
         autoscaleInfo(startTimePoint, endTimePoint) {
-            if (this._private__paneView) {
+            if (this._private__options.autoScale && this._private__paneView) {
                 const margins = this._private__getAutoScaleMargins();
                 if (margins) {
                     return {
@@ -14672,6 +16319,12 @@
                 }
             }
             return null;
+        }
+        _internal_applyOptions(options) {
+            this._private__options = mergeOptionsWithDefaults({ ...this._private__options, ...options });
+            if (this._internal_requestUpdate) {
+                this._internal_requestUpdate();
+            }
         }
         _private__getAutoScaleMargins() {
             const chart = ensureNotNull(this._private__chart);
@@ -14705,28 +16358,31 @@
                     inBar: false,
                     aboveBar: false,
                     belowBar: false,
+                    atPriceTop: false,
+                    atPriceBottom: false,
+                    atPriceMiddle: false,
                 });
             }
             return this._private__markersPositions;
         }
         _private__recalculateMarkers() {
-            if (!this._private__chart || !this._private__series) {
+            if (!this._private__recalculationRequired || !this._private__chart || !this._private__series) {
                 return;
             }
             const timeScale = this._private__chart.timeScale();
-            if (timeScale.getVisibleLogicalRange() == null || !this._private__series || this._private__series?.data().length === 0) {
+            const seriesData = this._private__series?.data();
+            if (timeScale.getVisibleLogicalRange() == null || !this._private__series || seriesData.length === 0) {
                 this._private__indexedMarkers = [];
                 return;
             }
-            const seriesData = this._private__series?.data();
             const firstDataIndex = timeScale.timeToIndex(ensureNotNull(seriesData[0].time), true);
             this._private__indexedMarkers = this._private__markers.map((marker, index) => {
                 const timePointIndex = timeScale.timeToIndex(marker.time, true);
                 const searchMode = timePointIndex < firstDataIndex ? 1 /* MismatchDirection.NearestRight */ : -1 /* MismatchDirection.NearestLeft */;
                 const seriesDataByIndex = ensureNotNull(this._private__series).dataByIndex(timePointIndex, searchMode);
-                // @TODO think about should we expose the series' `.search()` method
                 const finalIndex = timeScale.timeToIndex(ensureNotNull(seriesDataByIndex).time, false);
-                return {
+                // You must explicitly define the types so that the minification build processes the field names correctly
+                const baseMarker = {
                     time: finalIndex,
                     position: marker.position,
                     shape: marker.shape,
@@ -14735,18 +16391,41 @@
                     _internal_internalId: index,
                     text: marker.text,
                     size: marker.size,
+                    price: marker.price,
                     _internal_originalTime: marker.time,
                 };
+                if (marker.position === 'atPriceTop' ||
+                    marker.position === 'atPriceBottom' ||
+                    marker.position === 'atPriceMiddle') {
+                    if (marker.price === undefined) {
+                        throw new Error(`Price is required for position ${marker.position}`);
+                    }
+                    return {
+                        ...baseMarker,
+                        position: marker.position, // TypeScript knows this is SeriesMarkerPricePosition
+                        price: marker.price,
+                    };
+                }
+                else {
+                    return {
+                        ...baseMarker,
+                        position: marker.position, // TypeScript knows this is SeriesMarkerBarPosition
+                        price: marker.price, // Optional for bar positions
+                    };
+                }
             });
+            this._private__recalculationRequired = false;
         }
         _private__updateAllViews(updateType) {
             if (this._private__paneView) {
                 this._private__recalculateMarkers();
                 this._private__paneView._internal_setMarkers(this._private__indexedMarkers);
+                this._private__paneView._internal_updateOptions(this._private__options);
                 this._private__paneView._internal_update(updateType);
             }
         }
         _private__onDataChanged(scope) {
+            this._private__recalculationRequired = true;
             this._internal_requestUpdate();
         }
     }
@@ -14772,6 +16451,8 @@
      *
      * @param markers - An array of markers to be displayed on the series.
      *
+     * @param options - Options for the series markers plugin.
+     *
      * @example
      * ```js
      * import { createSeriesMarkers } from 'lightweight-charts';
@@ -14794,8 +16475,8 @@
      *  // `seriesMarkers.markers()` returns current markers
      * ```
      */
-    function createSeriesMarkers(series, markers) {
-        const wrapper = new SeriesMarkersPrimitiveWrapper(series, new SeriesMarkersPrimitive());
+    function createSeriesMarkers(series, markers, options) {
+        const wrapper = new SeriesMarkersPrimitiveWrapper(series, new SeriesMarkersPrimitive(options ?? {}));
         if (markers) {
             wrapper.setMarkers(markers);
         }
@@ -15139,7 +16820,7 @@
      * Returns the current version as a string. For example `'3.3.0'`.
      */
     function version() {
-        return "5.0.3";
+        return "5.2.0";
     }
 
     var LightweightChartsModule = /*#__PURE__*/Object.freeze({
