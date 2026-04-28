@@ -123,33 +123,6 @@ class Window:
     ) -> "Table":
         return Table(*locals().values())
 
-    def create_subchart(
-        self,
-        position: FLOAT = "left",
-        width: float = 0.5,
-        height: float = 0.5,
-        sync_id: Optional[str] = None,
-        scale_candles_only: bool = False,
-        sync_crosshairs_only: bool = False,
-        toolbox: bool = False,
-    ) -> "AbstractChart":
-        subchart = AbstractChart(
-            self, width, height, scale_candles_only, toolbox, position=position
-        )
-        if not sync_id:
-            return subchart
-        self.run_script(
-            f"""
-            Lib.Handler.syncCharts(
-                {subchart.id},
-                {sync_id},
-                {jbool(sync_crosshairs_only)}
-            )
-        """,
-            run_last=True,
-        )
-        return subchart
-
     def style(
         self,
         background_color: str = "#0c0d0f",
@@ -897,7 +870,7 @@ class Pane(_PaneBase):
         """
         return [s for s in self._chart._series_registry if s.pane_index == self._pane_index]
 
-    def attach_primitive(self, js_constructor_call: str) -> "AttachedPaneePrimitive":
+    def attach_primitive(self, js_constructor_call: str) -> "AttachedPanePrimitive":
         """
         Attaches a JavaScript primitive at the pane level.
         :param js_constructor_call: JS expression evaluating to a primitive object.
@@ -1582,22 +1555,6 @@ class AbstractChart(Candlestick, _PaneBase):
             f"{self.id}.chart.takeScreenshot().toDataURL()"
         )
         return b64decode(serial_data.split(",")[1])
-
-    def create_subchart(
-        self,
-        position: FLOAT = "left",
-        width: float = 0.5,
-        height: float = 0.5,
-        sync: Optional[Union[str, bool]] = None,
-        scale_candles_only: bool = False,
-        sync_crosshairs_only: bool = False,
-        toolbox: bool = False,
-    ) -> "AbstractChart":
-        if sync is True:
-            sync = self.id
-        args = locals()
-        del args["self"]
-        return self.win.create_subchart(*args.values())
 
     def resize_pane(self, pane_index: int, height: int):
         self.run_script(

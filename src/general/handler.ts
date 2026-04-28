@@ -7,13 +7,8 @@ import {
   IChartApi,
   ISeriesApi,
   LineStyleOptions,
-  LogicalRange,
-  LogicalRangeChangeEventHandler,
-  MouseEventHandler,
-  MouseEventParams,
   SeriesOptionsCommon,
   SeriesType,
-  Time,
   createChart,
   AreaSeries,
   CandlestickSeries,
@@ -269,99 +264,6 @@ export class Handler {
     // Exclude the chart attribute from serialization
     const { chart, ...serialized } = this;
     return serialized;
-  }
-
-  public static syncCharts(
-    childChart: Handler,
-    parentChart: Handler,
-    crosshairOnly = false
-  ) {
-    function crosshairHandler(chart: Handler, point: any) {
-      //point: BarData | LineData) {
-      if (!point) {
-        chart.chart.clearCrosshairPosition();
-        return;
-      }
-      // TODO fix any point ?
-      chart.chart.setCrosshairPosition(
-        point.value || point!.close,
-        point.time,
-        chart.series
-      );
-      chart.legend.legendHandler(point, true);
-    }
-
-    function getPoint(series: ISeriesApi<SeriesType>, param: MouseEventParams) {
-      if (!param.time) return null;
-      return param.seriesData.get(series) || null;
-    }
-
-    const childTimeScale = childChart.chart.timeScale();
-    const parentTimeScale = parentChart.chart.timeScale();
-
-    const setChildRange = (timeRange: LogicalRange | null) => {
-      if (timeRange) childTimeScale.setVisibleLogicalRange(timeRange);
-    };
-    const setParentRange = (timeRange: LogicalRange | null) => {
-      if (timeRange) parentTimeScale.setVisibleLogicalRange(timeRange);
-    };
-
-    const setParentCrosshair = (param: MouseEventParams) => {
-      crosshairHandler(parentChart, getPoint(childChart.series, param));
-    };
-    const setChildCrosshair = (param: MouseEventParams) => {
-      crosshairHandler(childChart, getPoint(parentChart.series, param));
-    };
-
-    let selected = parentChart;
-    function addMouseOverListener(
-      thisChart: Handler,
-      otherChart: Handler,
-      thisCrosshair: MouseEventHandler<Time>,
-      otherCrosshair: MouseEventHandler<Time>,
-      thisRange: LogicalRangeChangeEventHandler,
-      otherRange: LogicalRangeChangeEventHandler
-    ) {
-      thisChart.wrapper.addEventListener("mouseover", () => {
-        if (selected === thisChart) return;
-        selected = thisChart;
-        otherChart.chart.unsubscribeCrosshairMove(thisCrosshair);
-        thisChart.chart.subscribeCrosshairMove(otherCrosshair);
-        if (crosshairOnly) return;
-        otherChart.chart
-          .timeScale()
-          .unsubscribeVisibleLogicalRangeChange(thisRange);
-        thisChart.chart
-          .timeScale()
-          .subscribeVisibleLogicalRangeChange(otherRange);
-      });
-    }
-    addMouseOverListener(
-      parentChart,
-      childChart,
-      setParentCrosshair,
-      setChildCrosshair,
-      setParentRange,
-      setChildRange
-    );
-    addMouseOverListener(
-      childChart,
-      parentChart,
-      setChildCrosshair,
-      setParentCrosshair,
-      setChildRange,
-      setParentRange
-    );
-
-    parentChart.chart.subscribeCrosshairMove(setChildCrosshair);
-
-    const parentRange = parentTimeScale.getVisibleLogicalRange();
-    if (parentRange) childTimeScale.setVisibleLogicalRange(parentRange);
-
-    if (crosshairOnly) return;
-    parentChart.chart
-      .timeScale()
-      .subscribeVisibleLogicalRangeChange(setChildRange);
   }
 
   public static makeSearchBox(chart: Handler) {
