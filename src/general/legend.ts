@@ -19,30 +19,28 @@ interface LineElement {
 
 export class Legend {
   private handler: Handler;
+  private _paneIndex: number;
+  private _anchored: boolean = false;
   public div: HTMLDivElement;
   public seriesContainer: HTMLDivElement;
 
-  private ohlcEnabled: boolean = false;
-  private percentEnabled: boolean = false;
-  private linesEnabled: boolean = false;
-  private colorBasedOnCandle: boolean = false;
+  public ohlcEnabled: boolean = false;
+  public percentEnabled: boolean = false;
+  public linesEnabled: boolean = false;
+  public colorBasedOnCandle: boolean = false;
 
   private text: HTMLSpanElement;
   private candle: HTMLDivElement;
   public _lines: LineElement[] = [];
 
-  constructor(handler: Handler) {
+  constructor(paneIndex: number, handler: Handler) {
     this.legendHandler = this.legendHandler.bind(this);
 
+    this._paneIndex = paneIndex;
     this.handler = handler;
-    this.ohlcEnabled = false;
-    this.percentEnabled = false;
-    this.linesEnabled = false;
-    this.colorBasedOnCandle = false;
 
     this.div = document.createElement("div");
     this.div.classList.add("legend");
-    this.div.style.maxWidth = `${handler.scale.width * 100 - 8}vw`;
     this.div.style.display = "none";
 
     const seriesWrapper = document.createElement("div");
@@ -59,11 +57,29 @@ export class Legend {
     this.div.appendChild(this.text);
     this.div.appendChild(this.candle);
     this.div.appendChild(seriesWrapper);
-    handler.div.appendChild(this.div);
 
-    // this.makeSeriesRows(handler);
+    // DOM anchoring is deferred to tryAnchorToPane() — the pane element
+    // may not exist yet at construction time.
+  }
 
-    handler.chart.subscribeCrosshairMove(this.legendHandler);
+  /**
+   * Lazily anchors the legend div to the inner chart area div of its pane.
+   * IPaneApi.getHTMLElement() returns a <tr>; the chart area is at
+   * tr.children[1].children[0] (<td> → <div position:relative overflow:hidden>).
+   * Safe to call repeatedly — no-ops once anchored.
+   */
+  tryAnchorToPane() {
+    if (this._anchored) return;
+    const panes = this.handler.chart.panes();
+    if (this._paneIndex >= panes.length) return;
+    const tr = panes[this._paneIndex].getHTMLElement();
+    if (!tr) return;
+    const td = tr.children[1] as HTMLElement | undefined;
+    if (!td) return;
+    const innerDiv = td.children[0] as HTMLDivElement | undefined;
+    if (!innerDiv) return;
+    innerDiv.appendChild(this.div);
+    this._anchored = true;
   }
 
   toJSON() {
@@ -72,11 +88,8 @@ export class Legend {
     return serialized;
   }
 
-  // makeSeriesRows(handler: Handler) {
-  //     if (this.linesEnabled) handler._seriesList.forEach(s => this.makeSeriesRow(s))
-  // }
-
   makeSeriesRow(name: string, series: ISeriesApi<SeriesType>) {
+    this.tryAnchorToPane();
     const strokeColor = "#FFF";
     let openEye = `
     <path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:${strokeColor};stroke-opacity:1;stroke-miterlimit:4;" d="M 21.998437 12 C 21.998437 12 18.998437 18 12 18 C 5.001562 18 2.001562 12 2.001562 12 C 2.001562 12 5.001562 6 12 6 C 18.998437 6 21.998437 12 21.998437 12 Z M 21.998437 12 " transform="matrix(0.833333,0,0,0.833333,0,0)"/>
@@ -151,78 +164,76 @@ export class Legend {
   }
 
   legendHandler(param: MouseEventParams, usingPoint = false) {
+    this.tryAnchorToPane();
     if (!this.ohlcEnabled && !this.linesEnabled && !this.percentEnabled) return;
-    const options: any = this.handler.series.options();
+
+    // OHLC / percent / volume only belong on the main pane (index 0) because
+    // they read from handler.series which is always the pane-0 candlestick.
+    const isMainPane = this._paneIndex === 0;
 
     if (!param.time) {
-      this.candle.style.color = "transparent";
-      this.candle.innerHTML = this.candle.innerHTML
-        .replace(options["upColor"], "")
-        .replace(options["downColor"], "");
-      return;
+      if (isMainPane) {
+        const options: any = this.handler.series.options();
+        this.candle.style.color = "transparent";
+        this.candle.innerHTML = this.candle.innerHTML
+          .replace(options["upColor"], "")
+          .replace(options["downColor"], "");
+      }
+      if (!this.linesEnabled) return;
     }
 
     let data: any;
     let logical: Logical | null = null;
 
-    if (usingPoint) {
-      const timeScale = this.handler.chart.timeScale();
-      let coordinate = timeScale.timeToCoordinate(param.time);
-      if (coordinate)
-        logical = timeScale.coordinateToLogical(coordinate.valueOf());
-      if (logical) data = this.handler.series.dataByIndex(logical.valueOf());
-    } else {
-      data = param.seriesData.get(this.handler.series);
+    if (isMainPane && param.time) {
+      const options: any = this.handler.series.options();
+      if (usingPoint) {
+        const timeScale = this.handler.chart.timeScale();
+        let coordinate = timeScale.timeToCoordinate(param.time);
+        if (coordinate)
+          logical = timeScale.coordinateToLogical(coordinate.valueOf());
+        if (logical) data = this.handler.series.dataByIndex(logical.valueOf());
+      } else {
+        data = param.seriesData.get(this.handler.series);
+      }
+
+      this.candle.style.color = "";
+      let str = '<span style="line-height: 1.8;">';
+      if (data) {
+        if (this.ohlcEnabled) {
+          str += `O ${this.legendItemFormat(data.open, this.handler.precision)} `;
+          str += `| H ${this.legendItemFormat(data.high, this.handler.precision)} `;
+          str += `| L ${this.legendItemFormat(data.low, this.handler.precision)} `;
+          str += `| C ${this.legendItemFormat(data.close, this.handler.precision)} `;
+        }
+
+        if (this.percentEnabled) {
+          let percentMove = ((data.close - data.open) / data.open) * 100;
+          let color = percentMove > 0 ? options["upColor"] : options["downColor"];
+          let percentStr = `${percentMove >= 0 ? "+" : ""}${percentMove.toFixed(2)} %`;
+          if (this.colorBasedOnCandle) {
+            str += `| <span style="color: ${color};">${percentStr}</span>`;
+          } else {
+            str += "| " + percentStr;
+          }
+        }
+
+        if (this.handler.volumeSeries) {
+          let volumeData: any;
+          if (logical) {
+            volumeData = this.handler.volumeSeries.dataByIndex(logical);
+          } else {
+            volumeData = param.seriesData.get(this.handler.volumeSeries);
+          }
+          if (volumeData) {
+            str += this.ohlcEnabled
+              ? `<br>V ${this.shorthandFormat(volumeData.value)}`
+              : "";
+          }
+        }
+      }
+      this.candle.innerHTML = str + "</span>";
     }
-
-    this.candle.style.color = "";
-    let str = '<span style="line-height: 1.8;">';
-    if (data) {
-      if (this.ohlcEnabled) {
-        str += `O ${this.legendItemFormat(data.open, this.handler.precision)} `;
-        str += `| H ${this.legendItemFormat(
-          data.high,
-          this.handler.precision
-        )} `;
-        str += `| L ${this.legendItemFormat(
-          data.low,
-          this.handler.precision
-        )} `;
-        str += `| C ${this.legendItemFormat(
-          data.close,
-          this.handler.precision
-        )} `;
-      }
-
-      if (this.percentEnabled) {
-        let percentMove = ((data.close - data.open) / data.open) * 100;
-        let color = percentMove > 0 ? options["upColor"] : options["downColor"];
-        let percentStr = `${percentMove >= 0 ? "+" : ""}${percentMove.toFixed(
-          2
-        )} %`;
-
-        if (this.colorBasedOnCandle) {
-          str += `| <span style="color: ${color};">${percentStr}</span>`;
-        } else {
-          str += "| " + percentStr;
-        }
-      }
-
-      if (this.handler.volumeSeries) {
-        let volumeData: any;
-        if (logical) {
-          volumeData = this.handler.volumeSeries.dataByIndex(logical);
-        } else {
-          volumeData = param.seriesData.get(this.handler.volumeSeries);
-        }
-        if (volumeData) {
-          str += this.ohlcEnabled
-            ? `<br>V ${this.shorthandFormat(volumeData.value)}`
-            : "";
-        }
-      }
-    }
-    this.candle.innerHTML = str + "</span>";
 
     this._lines.forEach((e) => {
       if (!this.linesEnabled) {

@@ -156,6 +156,32 @@ class SeriesCommon(_PaneBase):
         if hasattr(chart, '_series_registry'):
             chart._series_registry.append(self)
 
+    def legend(
+        self,
+        visible: bool = True,
+        lines: bool = True,
+        color: str = "rgb(191, 195, 203)",
+        font_size: int = 11,
+        font_family: str = "Monaco",
+        text: str = "",
+    ):
+        """
+        Configures the legend for the pane this series lives on.
+        OHLC and percent are intentionally omitted — use chart.legend() on pane 0 for those.
+        """
+        pane_idx = self.pane_index if self.pane_index is not None else 0
+        self._chart.legend(
+            visible=visible,
+            ohlc=False,
+            percent=False,
+            lines=lines,
+            color=color,
+            font_size=font_size,
+            font_family=font_family,
+            text=text,
+            pane_index=pane_idx,
+        )
+
     def _set_interval(self, df: pd.DataFrame):
         if not pd.api.types.is_datetime64_any_dtype(df["time"]):
             if pd.api.types.is_numeric_dtype(df["time"]):
@@ -673,18 +699,18 @@ class Line(SeriesCommon):
         Irreversibly deletes the line, as well as the object that contains the line.
         """
         self._chart._lines.remove(self) if self in self._chart._lines else None
+        pane_idx = self.pane_index if self.pane_index is not None else 0
         self.run_script(
             f"""
-            {self.id}legendItem = {self._chart.id}.legend._lines.find((line) => line.series == {self.id}.series)
-            {self._chart.id}.legend._lines = {self._chart.id}.legend._lines.filter((item) => item != {self.id}legendItem)
-
-            if ({self.id}legendItem) {{
-                {self._chart.id}.legend.div.removeChild({self.id}legendItem.row)
+            var _leg = {self._chart.id}.legends.get({int(pane_idx)});
+            if (_leg) {{
+                {self.id}legendItem = _leg._lines.find((line) => line.series == {self.id}.series);
+                _leg._lines = _leg._lines.filter((item) => item != {self.id}legendItem);
+                if ({self.id}legendItem) _leg.div.removeChild({self.id}legendItem.row);
+                delete {self.id}legendItem;
             }}
-
-            {self._chart.id}.chart.removeSeries({self.id}.series)
-            delete {self.id}legendItem
-            delete {self.id}
+            {self._chart.id}.chart.removeSeries({self.id}.series);
+            delete {self.id};
         """
         )
 
@@ -756,18 +782,18 @@ class Area(SeriesCommon):
         Irreversibly deletes the area series.
         """
         self._chart._lines.remove(self) if self in self._chart._lines else None
+        pane_idx = self.pane_index if self.pane_index is not None else 0
         self.run_script(
             f"""
-            {self.id}legendItem = {self._chart.id}.legend._lines.find((line) => line.series == {self.id}.series)
-            {self._chart.id}.legend._lines = {self._chart.id}.legend._lines.filter((item) => item != {self.id}legendItem)
-
-            if ({self.id}legendItem) {{
-                {self._chart.id}.legend.div.removeChild({self.id}legendItem.row)
+            var _leg = {self._chart.id}.legends.get({int(pane_idx)});
+            if (_leg) {{
+                {self.id}legendItem = _leg._lines.find((line) => line.series == {self.id}.series);
+                _leg._lines = _leg._lines.filter((item) => item != {self.id}legendItem);
+                if ({self.id}legendItem) _leg.div.removeChild({self.id}legendItem.row);
+                delete {self.id}legendItem;
             }}
-
-            {self._chart.id}.chart.removeSeries({self.id}.series)
-            delete {self.id}legendItem
-            delete {self.id}
+            {self._chart.id}.chart.removeSeries({self.id}.series);
+            delete {self.id};
         """
         )
 
@@ -963,18 +989,18 @@ class Histogram(SeriesCommon):
         """
         Irreversibly deletes the histogram.
         """
+        pane_idx = self.pane_index if self.pane_index is not None else 0
         self.run_script(
             f"""
-            {self.id}legendItem = {self._chart.id}.legend._lines.find((line) => line.series == {self.id}.series)
-            {self._chart.id}.legend._lines = {self._chart.id}.legend._lines.filter((item) => item != {self.id}legendItem)
-
-            if ({self.id}legendItem) {{
-                {self._chart.id}.legend.div.removeChild({self.id}legendItem.row)
+            var _leg = {self._chart.id}.legends.get({int(pane_idx)});
+            if (_leg) {{
+                {self.id}legendItem = _leg._lines.find((line) => line.series == {self.id}.series);
+                _leg._lines = _leg._lines.filter((item) => item != {self.id}legendItem);
+                if ({self.id}legendItem) _leg.div.removeChild({self.id}legendItem.row);
+                delete {self.id}legendItem;
             }}
-
-            {self._chart.id}.chart.removeSeries({self.id}.series)
-            delete {self.id}legendItem
-            delete {self.id}
+            {self._chart.id}.chart.removeSeries({self.id}.series);
+            delete {self.id};
         """
         )
 
@@ -1459,11 +1485,13 @@ class AbstractChart(Candlestick, _PaneBase):
         font_family: str = "Monaco",
         text: str = "",
         color_based_on_candle: bool = False,
+        pane_index: int = 0,
     ):
         """
         Configures the legend of the chart.
+        :param pane_index: Which pane's legend to configure (default 0).
         """
-        l_id = f"{self.id}.legend"
+        l_id = f"{self.id}.getOrCreateLegend({int(pane_index)})"
         if not visible:
             self.run_script(
                 f"""
@@ -1482,7 +1510,6 @@ class AbstractChart(Candlestick, _PaneBase):
         {l_id}.linesEnabled = {jbool(lines)}
         {l_id}.colorBasedOnCandle = {jbool(color_based_on_candle)}
         {l_id}.div.style.color = '{color}'
-        {l_id}.color = '{color}'
         {l_id}.div.style.fontSize = '{font_size}px'
         {l_id}.div.style.fontFamily = '{font_family}'
         {l_id}.text.innerText = '{text}'

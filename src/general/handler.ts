@@ -45,7 +45,10 @@ export class Handler {
   public series: ISeriesApi<SeriesType>;
   public volumeSeries: ISeriesApi<SeriesType>;
 
-  public legend: Legend;
+  /** Per-pane legend instances, keyed by pane index. */
+  public legends: Map<number, Legend> = new Map();
+  /** Backward-compat accessor — always returns the pane-0 legend. */
+  public get legend(): Legend { return this.legends.get(0)!; }
   private _topBar: TopBar | undefined;
   public toolBox: ToolBox | undefined;
   public spinner: HTMLDivElement | undefined;
@@ -85,7 +88,13 @@ export class Handler {
     this.volumeSeries = this.createVolumeSeries(0);
     this.seriesMarkers = createSeriesMarkers(this.series, []);
 
-    this.legend = new Legend(this);
+    // Create pane-0 legend; DOM anchoring deferred until pane element is ready.
+    this.legends.set(0, new Legend(0, this));
+
+    // Single crosshair subscription — dispatches to all per-pane legends.
+    this.chart.subscribeCrosshairMove((param) => {
+      this.legends.forEach((leg) => leg.legendHandler(param));
+    });
 
     document.addEventListener("keydown", (event) => {
       for (let i = 0; i < this.commandFunctions.length; i++) {
@@ -197,6 +206,18 @@ export class Handler {
     return volumeSeries;
   }
 
+  /**
+   * Returns the Legend for the given pane, creating one lazily if it does not
+   * yet exist. This is the preferred accessor from both internal series-creation
+   * methods and the Python `getOrCreateLegend(idx)` bridge.
+   */
+  getOrCreateLegend(paneIndex: number): Legend {
+    if (!this.legends.has(paneIndex)) {
+      this.legends.set(paneIndex, new Legend(paneIndex, this));
+    }
+    return this.legends.get(paneIndex)!;
+  }
+
   createLineSeries(
     name: string,
     options: DeepPartial<LineStyleOptions & SeriesOptionsCommon>,
@@ -204,7 +225,7 @@ export class Handler {
   ) {
     const line = this.chart.addSeries(LineSeries, { ...options }, paneIndex);
     this._seriesList.push(line);
-    this.legend.makeSeriesRow(name, line);
+    this.getOrCreateLegend(paneIndex ?? 0).makeSeriesRow(name, line);
 
     return {
       name: name,
@@ -223,7 +244,7 @@ export class Handler {
       paneIndex
     );
     this._seriesList.push(line);
-    this.legend.makeSeriesRow(name, line);
+    this.getOrCreateLegend(paneIndex ?? 0).makeSeriesRow(name, line);
     return {
       name: name,
       series: line,
@@ -237,7 +258,7 @@ export class Handler {
   ) {
     const area = this.chart.addSeries(AreaSeries, { ...options }, paneIndex);
     this._seriesList.push(area);
-    this.legend.makeSeriesRow(name, area);
+    this.getOrCreateLegend(paneIndex ?? 0).makeSeriesRow(name, area);
     return {
       name: name,
       series: area,
