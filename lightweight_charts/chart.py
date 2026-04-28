@@ -247,6 +247,8 @@ class Chart(abstract.AbstractChart):
                     return
                 else:
                     func, args = parse_event_message(self.win, response)
+                    if func is None:
+                        continue
                     (
                         await func(*args)
                         if inspect.iscoroutinefunction(func)

@@ -14,8 +14,9 @@ class Section(Pane):
     def __call__(self, number_of_text_boxes: int, func: Optional[Callable] = None):
         if func is not None:
             self.win.handlers[self.id] = lambda boxId: func(self._table, int(boxId))
+        callback_name = f'"{self.id}"' if func is not None else 'null'
         self.run_script(f'''
-        {self._table.id}.makeSection("{self.id}", "{self.type}", {number_of_text_boxes}, {"true" if func else ""})
+        {self._table.id}.makeSection("{self.id}", "{self.type}", {number_of_text_boxes}, {callback_name})
         ''')
 
     def __setitem__(self, key, value):
@@ -81,20 +82,22 @@ class Table(Pane, dict):
         self._formatters = {}
         self.headings = headings
         self.is_shown = True
-        def wrapper(rId, cId=None):
-            if return_clicked_cells:
-                func(self[rId], cId)
-            else:
-                func(self[rId])
-
-        async def async_wrapper(rId, cId=None):
-            if return_clicked_cells:
-                await func(self[rId], cId)
-            else:
-                await func(self[rId])
-
-        self.win.handlers[self.id] = async_wrapper if inspect.iscoroutinefunction(func) else wrapper
         self.return_clicked_cells = return_clicked_cells
+
+        if func is not None:
+            def wrapper(rId, cId=None):
+                if return_clicked_cells:
+                    func(self[rId], cId)
+                else:
+                    func(self[rId])
+
+            async def async_wrapper(rId, cId=None):
+                if return_clicked_cells:
+                    await func(self[rId], cId)
+                else:
+                    await func(self[rId])
+
+            self.win.handlers[self.id] = async_wrapper if inspect.iscoroutinefunction(func) else wrapper
 
         self.run_script(f'''
         {self.id} = new Lib.Table(

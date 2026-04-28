@@ -34,8 +34,13 @@ export class Table {
             this._div.style.position = 'absolute'
             this._div.style.cursor = 'move'
         } else {
-            this._div.style.position = 'relative'
-            this._div.style.float = position
+            this._div.style.position = 'absolute'
+            if (position === 'right') {
+                this._div.style.right = '0px'
+            } else {
+                this._div.style.left = '0px'
+            }
+            this._div.style.top = '0px'
         }
         this._div.style.zIndex = '2000'
         this.reSize(width, height)
