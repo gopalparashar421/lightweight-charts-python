@@ -1,4 +1,4 @@
-from .abstract import AbstractChart, Window, Line, Area, Histogram, AttachedPrimitive, UpDownMarkers, Pane
+from .abstract import AbstractChart, Window, Line, Area, Histogram, AttachedPrimitive, UpDownMarkers, Pane, SeriesCommon
 from .chart import Chart
 from .widgets import JupyterChart
 from .polygon import PolygonChart
@@ -22,6 +22,7 @@ __all__ = [
     'Chart',
     'JupyterChart',
     'PolygonChart',
+    'SeriesCommon',
     'SessionHighlighting',
     'Tooltip',
     'BandsIndicator',
