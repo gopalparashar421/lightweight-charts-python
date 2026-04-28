@@ -1614,12 +1614,6 @@ class AbstractChart(Candlestick, _PaneBase):
         """
         return int(self.win.run_script_and_get(f"{self.id}.chart.panes().length"))
 
-    def move_pane(self, from_index: int, to_index: int):
-        """
-        Swaps two panes by their indices.
-        """
-        self.run_script(f"{self.id}.chart.swapPanes({from_index}, {to_index})")
-
     def panes(self) -> "List[Pane]":
         """
         Returns a list of ``Pane`` objects, one per pane.
