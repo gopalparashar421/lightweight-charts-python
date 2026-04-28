@@ -1,4 +1,6 @@
 import json
+import inspect
+import asyncio
 import os
 from base64 import b64decode
 from datetime import datetime
@@ -19,7 +21,7 @@ from .drawings import (
 from .topbar import TopBar
 from .util import (
     BulkRunScript,
-    Pane,
+    Pane as _PaneBase,
     Events,
     IDGen,
     as_enum,
@@ -162,7 +164,7 @@ class Window:
         self.run_script(f"Lib.Handler.setRootStyles({js_json(locals())});")
 
 
-class SeriesCommon(Pane):
+class SeriesCommon(_PaneBase):
     def __init__(self, chart: "AbstractChart", name: str = "", pane_index: int = None):
         super().__init__(chart.win)
         self._chart = chart
@@ -177,6 +179,9 @@ class SeriesCommon(Pane):
         self.data = pd.DataFrame()
         self.markers = {}
         self.pane_index = pane_index
+        self._data_changed_handler_id: Optional[str] = None
+        if hasattr(chart, '_series_registry'):
+            chart._series_registry.append(self)
 
     def _set_interval(self, df: pd.DataFrame):
         if not pd.api.types.is_datetime64_any_dtype(df["time"]):
@@ -492,6 +497,141 @@ class SeriesCommon(Pane):
         """
         return AttachedPrimitive(self, js_constructor_call)
 
+    # ── ISeriesApi additions ──────────────────────────────────────────────────
+
+    def options(self) -> dict:
+        """Returns the current series options as a dict (blocking)."""
+
+        result = self.win.run_script_and_get(f"JSON.stringify({self.id}.series.options())")
+        return json.loads(result) if isinstance(result, str) else {}
+
+    def get_data(self) -> list:
+        """Returns all series data as a list of dicts from JS (blocking)."""
+
+        result = self.win.run_script_and_get(f"JSON.stringify({self.id}.series.data())")
+        return json.loads(result) if isinstance(result, str) else []
+
+    def data_by_index(
+        self,
+        logical_index: int,
+        mismatch_direction: "Literal['nearest_left', 'nearest_right', None]" = None,
+    ) -> dict:
+        """Returns the data point at *logical_index* (blocking)."""
+
+        dir_map = {'nearest_left': -1, 'nearest_right': 1}
+        dir_arg = dir_map.get(mismatch_direction, 0) if mismatch_direction else 0
+        result = self.win.run_script_and_get(
+            f"JSON.stringify({self.id}.series.dataByIndex({int(logical_index)}, {dir_arg}))"
+        )
+        return json.loads(result) if isinstance(result, str) else {}
+
+    def price_to_coordinate(self, price: float) -> Optional[float]:
+        """Converts a price to a y-coordinate (blocking, synchronous)."""
+        result = self.win.run_script_and_get(
+            f"{self.id}.series.priceToCoordinate({float(price)})"
+        )
+        return float(result) if result not in (None, 'null', 'undefined') else None
+
+    def coordinate_to_price(self, coordinate: float) -> Optional[float]:
+        """Converts a y-coordinate to a price (blocking, synchronous)."""
+        result = self.win.run_script_and_get(
+            f"{self.id}.series.coordinateToPrice({float(coordinate)})"
+        )
+        return float(result) if result not in (None, 'null', 'undefined') else None
+
+    def bars_in_logical_range(self, from_index: int, to_index: int) -> Optional[dict]:
+        """Returns bars info for the given logical index range (blocking)."""
+
+        result = self.win.run_script_and_get(
+            f"JSON.stringify({self.id}.series.barsInLogicalRange({{from: {int(from_index)}, to: {int(to_index)}}}))".replace(
+                "\\\"from\\\"", "from").replace("\\\"to\\\"", "to")
+        )
+        return json.loads(result) if isinstance(result, str) else None
+
+    def series_type(self) -> str:
+        """Returns the series type string (blocking)."""
+        result = self.win.run_script_and_get(f"{self.id}.series.seriesType()")
+        return str(result) if result else ''
+
+    def last_value_data(self, global_last: bool = True) -> Optional[dict]:
+        """Returns data about the last visible value (blocking)."""
+
+        result = self.win.run_script_and_get(
+            f"JSON.stringify({self.id}.series.lastValueData({jbool(global_last)}))"
+        )
+        return json.loads(result) if isinstance(result, str) else None
+
+    def series_order(self) -> int:
+        """Returns the Z-order of this series within its pane (blocking)."""
+        result = self.win.run_script_and_get(f"{self.id}.series.seriesOrder()")
+        return int(result) if result is not None else 0
+
+    def set_series_order(self, order: int):
+        """Sets the Z-order of this series within its pane."""
+        self.run_script(f"{self.id}.series.setSeriesOrder({int(order)})")
+
+    def move_to_pane(self, pane_index: int | None = None):
+        """Moves this series to the pane at *pane_index* (requires window open when pane_index is None)."""
+        if pane_index is None:
+            self.run_script(f"{self.id}.series.moveToPane()")
+            self.pane_index = int(self.win.run_script_and_get(
+                f"{self._chart.id}.chart.panes().indexOf({self.id}.series.getPane())"
+            ))
+        else:
+            self.run_script(f"{self.id}.series.moveToPane({int(pane_index)})")
+            self.pane_index = pane_index
+
+    def get_pane(self) -> "Pane":
+        """Returns the ``Pane`` for the pane this series lives on (blocking)."""
+        idx = int(self.win.run_script_and_get(
+            f"{self._chart.id}.chart.panes().indexOf({self.id}.series.getPane())"
+        ))
+        return Pane(self._chart, idx)
+
+    def subscribe_data_changed(self, func: Callable):
+        """
+        Subscribes to data changes on this series.
+        :param func: Callable receiving this series as its first argument.
+        """
+        salt = self.id.replace('window.', '')
+        handler_id = f'data_changed_{salt}'
+        self._data_changed_handler_id = handler_id
+
+        def _wrapper(*_args):
+            if inspect.iscoroutinefunction(func):
+                asyncio.create_task(func(self))
+            else:
+                func(self)
+
+        self.win.handlers[handler_id] = _wrapper
+        self.run_script(f"""
+            if (typeof {self.id}._dataChangedCb !== 'undefined') {{
+                {self.id}.series.unsubscribeDataChanged({self.id}._dataChangedCb);
+            }}
+            {self.id}._dataChangedCb = () => window.callbackFunction('{handler_id}_~_');
+            {self.id}.series.subscribeDataChanged({self.id}._dataChangedCb);
+        null""")
+
+    def unsubscribe_data_changed(self):
+        """Unsubscribes from data change events on this series."""
+        if self._data_changed_handler_id:
+            self.win.handlers.pop(self._data_changed_handler_id, None)
+            self._data_changed_handler_id = None
+        self.run_script(f"""
+            if (typeof {self.id}._dataChangedCb !== 'undefined') {{
+                {self.id}.series.unsubscribeDataChanged({self.id}._dataChangedCb);
+                delete {self.id}._dataChangedCb;
+            }}
+        null""")
+
+    def price_lines(self) -> list:
+        """Returns all price lines attached to this series as a list of dicts (blocking)."""
+
+        result = self.win.run_script_and_get(
+            f"JSON.stringify({self.id}.series.priceLines().map(pl => pl.options()))"
+        )
+        return json.loads(result) if isinstance(result, str) else []
+
 
 class Line(SeriesCommon):
     def __init__(
@@ -659,7 +799,7 @@ class Area(SeriesCommon):
         )
 
 
-class AttachedPrimitive(Pane):
+class AttachedPrimitive(_PaneBase):
     """
     Wraps a JavaScript series primitive attached via series.attachPrimitive().
     """
@@ -683,7 +823,7 @@ class AttachedPrimitive(Pane):
         self.run_script(f"{self.id}.applyOptions({js_json(options)})")
 
 
-class UpDownMarkers(Pane):
+class UpDownMarkers(_PaneBase):
     """
     Attaches an up/down marker primitive to a series using LWC v5's
     createUpDownMarkers API.
@@ -713,6 +853,104 @@ class UpDownMarkers(Pane):
     def detach(self):
         """Detaches the up/down markers from the series."""
         self.run_script(f"{self.id}.detach()")
+
+
+class Pane(_PaneBase):
+    """
+    Python wrapper for the LWC IPaneApi. Represents a single chart pane.
+
+    .. note::
+        ``Pane`` instances become stale after structural pane changes
+        (``remove_pane``, ``swap_panes``). Re-call ``chart.panes()`` after
+        such operations.
+    """
+
+    def __init__(self, chart: "AbstractChart", pane_index: int):
+        super().__init__(chart.win)
+        self._chart = chart
+        self._pane_index = pane_index
+
+    def _pane_expr(self) -> str:
+        return f"{self._chart.id}.chart.panes()[{self._pane_index}]"
+
+    def get_height(self) -> int:
+        """Returns the pane height in pixels (blocking)."""
+        return int(self.win.run_script_and_get(f"{self._pane_expr()}.getHeight()"))
+
+    def set_height(self, height: int):
+        """Sets the pane height in pixels."""
+        self.run_script(f"{self._pane_expr()}.setHeight({int(height)})")
+
+    def move_to(self, pane_index: int):
+        """Reorders this pane to the given index."""
+        self.run_script(f"{self._pane_expr()}.moveTo({int(pane_index)})")
+        self._pane_index = pane_index
+
+    def pane_index(self) -> int:
+        """Returns the current pane index (uses cached value)."""
+        return self._pane_index
+
+    def get_series(self) -> list:
+        """
+        Returns the list of ``SeriesCommon`` objects on this pane that are
+        tracked in the parent chart's series registry.
+        """
+        return [s for s in self._chart._series_registry if s.pane_index == self._pane_index]
+
+    def attach_primitive(self, js_constructor_call: str) -> "AttachedPaneePrimitive":
+        """
+        Attaches a JavaScript primitive at the pane level.
+        :param js_constructor_call: JS expression evaluating to a primitive object.
+        :return: An ``AttachedPanePrimitive`` instance.
+        """
+        return AttachedPanePrimitive(self, js_constructor_call)
+
+    def detach_primitive(self, primitive: "AttachedPanePrimitive"):
+        """Detaches a previously attached pane primitive."""
+        primitive.detach()
+
+    def price_scale(self, price_scale_id: str):
+        """Returns a JS price scale reference expression (not a Python object)."""
+        self.run_script(
+            f"{self._pane_expr()}.priceScale('{price_scale_id}')"
+        )
+
+    def set_preserve_empty_pane(self, preserve: bool):
+        """Sets whether this pane is preserved when all its series are removed."""
+        self.run_script(
+            f"{self._pane_expr()}.setPreserveEmptyPane({jbool(preserve)})"
+        )
+
+    def preserve_empty_pane(self) -> bool:
+        """Returns whether the empty-pane preservation flag is set (blocking)."""
+        result = self.win.run_script_and_get(f"{self._pane_expr()}.preserveEmptyPane()")
+        return result is True or result == 'true'
+
+    def get_stretch_factor(self) -> float:
+        """Returns the relative height factor of this pane (blocking)."""
+        return float(self.win.run_script_and_get(f"{self._pane_expr()}.getStretchFactor()"))
+
+    def set_stretch_factor(self, factor: float):
+        """Sets the relative height factor of this pane."""
+        self.run_script(f"{self._pane_expr()}.setStretchFactor({float(factor)})")
+
+
+class AttachedPanePrimitive(_PaneBase):
+    """Wraps a JavaScript primitive attached at the pane level."""
+
+    def __init__(self, pane: Pane, js_constructor_call: str):
+        super().__init__(pane.win)
+        self._pane = pane
+        self.run_script(
+            f"""
+            {self.id} = {js_constructor_call};
+            {pane._pane_expr()}.attachPrimitive({self.id});
+        null"""
+        )
+
+    def detach(self):
+        """Detaches this primitive from the pane."""
+        self.run_script(f"{self._pane._pane_expr()}.detachPrimitive({self.id})")
 
 
 class Histogram(SeriesCommon):
@@ -968,7 +1206,7 @@ class Candlestick(SeriesCommon):
         )
 
 
-class AbstractChart(Candlestick, Pane):
+class AbstractChart(Candlestick, _PaneBase):
     def __init__(
         self,
         window: Window,
@@ -979,9 +1217,10 @@ class AbstractChart(Candlestick, Pane):
         autosize: bool = True,
         position: FLOAT = "left",
     ):
-        Pane.__init__(self, window)
+        _PaneBase.__init__(self, window)
 
         self._lines = []
+        self._series_registry: List["SeriesCommon"] = []
         self._scale_candles_only = scale_candles_only
         self._width = width
         self._height = height
@@ -1396,3 +1635,87 @@ class AbstractChart(Candlestick, Pane):
         Swaps two panes by their indices.
         """
         self.run_script(f"{self.id}.chart.swapPanes({from_index}, {to_index})")
+
+    def panes(self) -> "List[Pane]":
+        """
+        Returns a list of ``Pane`` objects, one per pane.
+        The pane count is fetched from JS once; the list is rebuilt on each call.
+        """
+        count = int(self.win.run_script_and_get(f"{self.id}.chart.panes().length"))
+        return [Pane(self, i) for i in range(count)]
+
+    def swap_panes(self, first: int, second: int):
+        """Swaps the panes at *first* and *second* indices."""
+        self.run_script(f"{self.id}.chart.swapPanes({int(first)}, {int(second)})")
+
+    # ── IChartApi additions ───────────────────────────────────────────────────
+
+    def auto_size_active(self) -> bool:
+        """Returns whether autosize is currently active (blocking)."""
+        result = self.win.run_script_and_get(f"{self.id}.chart.autoSizeActive()")
+        return result is True or result == 'true'
+
+    def subscribe_dbl_click(self, func: Callable):
+        """
+        Subscribes to double-click events on the chart.
+        :param func: Callable receiving ``(chart, time, price)`` arguments.
+        """
+        salt = self.id.replace('window.', '')
+        handler_id = f'dbl_click_{salt}'
+
+        def _wrapper(chart, *args):
+            parsed = [float(a) if a != 'null' else None for a in args]
+            if inspect.iscoroutinefunction(func):
+                asyncio.create_task(func(chart, *parsed))
+            else:
+                func(chart, *parsed)
+
+        self.win.handlers[handler_id] = lambda *a: _wrapper(self, *a)
+        self.run_script(f"""
+            if (typeof {self.id}._dblClickHandler !== 'undefined') {{
+                {self.id}.chart.unsubscribeDblClick({self.id}._dblClickHandler);
+            }}
+            {self.id}._dblClickHandler = (param) => {{
+                if (!param.point) return;
+                const time = {self.id}.chart.timeScale().coordinateToTime(param.point.x);
+                const price = {self.id}.series.coordinateToPrice(param.point.y);
+                window.callbackFunction(`{handler_id}_~_${{time}};;;${{price}}`);
+            }};
+            {self.id}.chart.subscribeDblClick({self.id}._dblClickHandler);
+        null""")
+
+    def unsubscribe_dbl_click(self):
+        """Unsubscribes from double-click events."""
+        salt = self.id.replace('window.', '')
+        self.win.handlers.pop(f'dbl_click_{salt}', None)
+        self.run_script(f"""
+            if (typeof {self.id}._dblClickHandler !== 'undefined') {{
+                {self.id}.chart.unsubscribeDblClick({self.id}._dblClickHandler);
+                delete {self.id}._dblClickHandler;
+            }}
+        null""")
+
+    def set_crosshair_position(self, price: float, time: TIME, series: "SeriesCommon"):
+        """
+        Programmatically sets the crosshair position.
+        :param price: The price level.
+        :param time: The time value (will be converted to unix seconds).
+        :param series: The series the crosshair should snap to.
+        """
+        ts = int(pd.Timestamp(time).value // 10**9) if not isinstance(time, (int, float)) else int(time)
+        self.run_script(
+            f"{self.id}.chart.setCrosshairPosition({float(price)}, {ts}, {series.id}.series)"
+        )
+
+    def clear_crosshair_position(self):
+        """Clears the crosshair position."""
+        self.run_script(f"{self.id}.chart.clearCrosshairPosition()")
+
+    def pane_size(self, pane_index: int = 0) -> dict:
+        """
+        Returns the ``{width, height}`` of the pane at *pane_index* (blocking).
+        """
+        result = self.win.run_script_and_get(
+            f"JSON.stringify({self.id}.chart.paneSize({int(pane_index)}))"
+        )
+        return json.loads(result) if isinstance(result, str) else {}

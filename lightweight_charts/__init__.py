@@ -1,4 +1,4 @@
-from .abstract import AbstractChart, Window, Line, Area, Histogram, AttachedPrimitive, UpDownMarkers
+from .abstract import AbstractChart, Window, Line, Area, Histogram, AttachedPrimitive, UpDownMarkers, Pane
 from .chart import Chart
 from .widgets import JupyterChart
 from .polygon import PolygonChart
@@ -28,4 +28,5 @@ __all__ = [
     'VolumeProfile',
     'HeatmapSeries',
     'PositionTool',
+    'Pane',
 ]
