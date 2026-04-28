@@ -1,6 +1,6 @@
 ---
 name: lightweight-charts-python-api
-description: "API usage and code examples for the lightweight-charts-python package. Use when: writing chart code, creating series, loading data, styling charts, streaming live data, using plugins (Tooltip, BandsIndicator, SessionHighlighting, HeatmapSeries, PositionTool), adding tables, handling callbacks, building multi-pane layouts, or attaching custom primitives."
+description: "API usage and code examples for the lightweight-charts-python package. Use when: writing chart code, creating series, loading data, styling charts, streaming live data, using plugins (Tooltip, BandsIndicator, SessionHighlighting, HeatmapSeries, PositionTool), adding tables, handling callbacks, building multi-pane layouts, attaching custom primitives, or using Pane/Series/Chart API methods."
 ---
 
 # lightweight-charts-python API
@@ -16,7 +16,7 @@ description: "API usage and code examples for the lightweight-charts-python pack
 ## Core Imports
 
 ```python
-from lightweight_charts import Chart
+from lightweight_charts import Chart, Pane
 # Series types returned by factory methods — no need to import separately
 # Plugins live in the sub-package:
 from lightweight_charts.plugins import (
@@ -128,7 +128,9 @@ chart.crosshair(
     horz_color='#FFFFFF', horz_style='dotted',
 )
 
-chart.legend(visible=True, font_size=14)
+chart.legend(visible=True, ohlc=True, percent=True, lines=True, font_size=14)
+# pane_index param targets a specific pane's legend (default 0)
+chart.legend(visible=True, pane_index=1, lines=True)
 
 chart.fit()   # zoom-to-fit all data
 ```
@@ -169,6 +171,8 @@ for _, tick in ticks.iterrows():
 Use `pane_index` to place series in separate panes.  
 Instantiate the chart with `Chart(inner_height=1)`.
 
+`create_subchart` has been **removed**. Use `chart.add_pane()` and `pane_index` instead.
+
 ```python
 chart = Chart(inner_height=1)
 
@@ -177,14 +181,113 @@ chart.set(df)
 line = chart.create_line('SMA 5', pane_index=0)
 line.set(sma_df)
 
+# Add sub-panes
+chart.add_pane()             # optional: chart.add_pane(height=150)
+chart.add_pane()
+
 # Sub-pane 1 — MACD histogram
 histogram = chart.create_histogram('MACD', pane_index=1)
 histogram.set(macd_df)
+
+# Per-pane legends — call .legend() on any series in that pane
+histogram.legend(visible=True, color='#FFD700', font_size=11)
+```
+
+### Pane management (AbstractChart)
+```python
+chart.add_pane(height=150)      # add new pane (height optional)
+chart.remove_pane(2)            # remove pane by index
+chart.get_pane_count()          # → int
+chart.panes()                   # → List[Pane]
+chart.swap_panes(1, 2)          # swap two panes
+chart.resize_pane(1, 200)       # set pixel height
+chart.pane_size(0)              # → {'width': ..., 'height': ...}
 ```
 
 ---
 
-## 7. Callbacks & Topbar
+## 7. Pane API (`Pane` object)
+
+`Pane` instances are returned by `chart.panes()` or `series.get_pane()`.
+
+```python
+panes = chart.panes()           # List[Pane]
+p = panes[1]
+
+p.pane_index()                  # → int (cached)
+p.get_height()                  # → int pixels (blocking)
+p.set_height(200)
+p.get_stretch_factor()          # → float
+p.set_stretch_factor(2.0)
+p.move_to(0)                    # reorder pane
+p.get_series()                  # → list of series on this pane
+p.set_preserve_empty_pane(True)
+p.preserve_empty_pane()         # → bool
+p.attach_primitive(js_expr)     # → AttachedPanePrimitive
+```
+
+---
+
+## 8. Series API (new `ISeriesApi` methods)
+
+All series types (`Line`, `Area`, `Histogram`) expose these additional methods:
+
+```python
+# Query
+series.options()                        # → dict of current JS options
+series.get_data()                       # → list of dicts (blocking)
+series.data_by_index(0)                 # → dict
+series.data_by_index(0, 'nearest_right')  # mismatch_direction: 'nearest_left'|'nearest_right'
+series.last_value_data()                # → dict with last visible value info
+series.bars_in_logical_range(0, 10)     # → dict
+series.series_type()                    # → str e.g. 'Line'
+series.series_order()                   # → int (z-order)
+series.set_series_order(2)
+series.price_lines()                    # → list of price-line option dicts
+
+# Coordinate conversion
+series.price_to_coordinate(price)       # → float | None
+series.coordinate_to_price(coord)       # → float | None
+
+# Pane navigation
+series.get_pane()                       # → Pane
+series.move_to_pane(2)                  # move series to pane index
+
+# Per-series/per-pane legend
+series.legend(visible=True, color='#FFD700', font_size=11, lines=True)
+# Note: OHLC/percent rows are not shown; use chart.legend() on pane 0 for those.
+
+# Data-change subscription
+def on_data_changed(s):
+    print(f'data changed: {s.name}')
+
+series.subscribe_data_changed(on_data_changed)
+series.unsubscribe_data_changed()
+```
+
+---
+
+## 9. Chart-level IChartApi additions
+
+```python
+chart.options()                         # → dict of chart options (blocking)
+chart.auto_size_active()                # → bool
+
+# Double-click callback: func(chart, time, price)
+def on_dbl_click(c, time, price):
+    print(time, price)
+
+chart.subscribe_dbl_click(on_dbl_click)
+chart.unsubscribe_dbl_click()
+
+# Crosshair control
+chart.set_crosshair_position(price=183.5, time='2024-01-10', series=kama)
+chart.clear_crosshair_position()
+```
+
+---
+
+## 10. Callbacks & Topbar
 
 ```python
 chart = Chart(toolbox=True)
@@ -212,7 +315,7 @@ Read topbar values with `chart.topbar['widget_name'].value`.
 
 ---
 
-## 8. Plugins
+## 11. Plugins
 
 All plugins are imported from `lightweight_charts.plugins`.
 
@@ -310,7 +413,7 @@ position.delete()
 
 ---
 
-## 9. Attaching a Custom Primitive
+## 12. Attaching a Custom Primitive
 
 ```python
 line = chart.create_line(name='value', color='#7B68EE')
@@ -330,7 +433,7 @@ The argument is a raw JS expression that evaluates to an object implementing the
 
 ---
 
-## 10. Table
+## 13. Table
 
 ```python
 table = chart.create_table(
@@ -344,7 +447,8 @@ table = chart.create_table(
     border_color='rgb(50, 56, 68)', border_width=1,
     heading_text_colors=('#9598a1',) * 4,
     heading_background_colors=('#1e222d',) * 4,
-    func=on_row_click,   # optional row-click callback
+    func=on_row_click,             # optional row/cell-click callback
+    return_clicked_cells=True,     # if True, callback receives (row, cell) instead of (row,)
 )
 
 # Value format templates
@@ -365,10 +469,15 @@ row.background_color('Change %', '#26a69a')
 row.text_color('Change %', '#ffffff')
 ```
 
-Row-click callback signature:
+Row/cell-click callback signatures:
 ```python
+# Default (return_clicked_cells=False)
 def on_row_click(row):
     symbol = row['Symbol']   # access cell value by heading name
+
+# With return_clicked_cells=True
+def on_row_click(row, cell=None):
+    print(row['Symbol'], cell)   # cell is the clicked column name, or None
 ```
 
 ---
