@@ -164,12 +164,13 @@ class SeriesCommon(_PaneBase):
         font_size: int = 11,
         font_family: str = "Monaco",
         text: str = "",
+        pane_index: Optional[int] = None,
     ):
         """
         Configures the legend for the pane this series lives on.
         OHLC and percent are intentionally omitted — use chart.legend() on pane 0 for those.
         """
-        pane_idx = self.pane_index if self.pane_index is not None else 0
+        pane_idx = pane_index if pane_index is not None else self.pane_index if self.pane_index is not None else 0
         self._chart.legend(
             visible=visible,
             ohlc=False,
