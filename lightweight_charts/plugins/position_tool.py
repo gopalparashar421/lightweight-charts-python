@@ -26,13 +26,9 @@ class PositionTool(Pane):
       stop-loss price.
     * A **target zone** (green rectangle) between the entry price and the
       take-profit price.
-    * A dashed **entry line** at the entry price.
-    * **Metric labels** inside each zone showing risk/reward in points, %,
-      and optionally currency amounts when *account_balance* and
-      *risk_percent* are provided.
 
     The right edge of the overlay normally auto-tracks the latest bar on the
-    attached series (always at least 5 bars wide from the entry).  Pass an
+    attached series (always at least 15 bars wide from the entry).  Pass an
     explicit *end_time* to pin it.
 
     Price-ordering constraints
@@ -48,10 +44,6 @@ class PositionTool(Pane):
     :param end_time:         Optional right-edge timestamp.  ``None`` = auto.
     :param stop_color:       Fill colour of the risk zone rectangle.
     :param target_color:     Fill colour of the reward zone rectangle.
-    :param entry_line_color: Colour of the dashed entry-price line.
-    :param text_color:       Colour of all metric label text.
-    :param account_balance:  Account balance used to compute currency labels.
-    :param risk_percent:     Percentage of account risked (e.g. ``1`` = 1 %).
     """
 
     def __init__(
@@ -64,10 +56,6 @@ class PositionTool(Pane):
         end_time: Optional[TIME] = None,
         stop_color: str = 'rgba(239, 83, 80, 0.25)',
         target_color: str = 'rgba(38, 166, 154, 0.25)',
-        entry_line_color: str = '#FFD700',
-        text_color: str = 'rgba(255, 255, 255, 0.85)',
-        account_balance: Optional[NUM] = None,
-        risk_percent: Optional[NUM] = None,
     ):
         super().__init__(series._chart.win)
         self._series = series
@@ -87,10 +75,6 @@ class PositionTool(Pane):
                 endTime:         {end_ts},
                 stopColor:       '{stop_color}',
                 targetColor:     '{target_color}',
-                entryLineColor:  '{entry_line_color}',
-                textColor:       '{text_color}',
-                accountBalance:  {_js_num(account_balance)},
-                riskPercent:     {_js_num(risk_percent)},
             }});
             {series.id}.series.attachPrimitive({self.id});
         null''')
@@ -103,8 +87,6 @@ class PositionTool(Pane):
         stop: Optional[NUM] = None,
         target: Optional[NUM] = None,
         end_time: Optional[TIME] = None,
-        account_balance: Optional[NUM] = None,
-        risk_percent: Optional[NUM] = None,
     ) -> None:
         """
         Update one or more position parameters.
@@ -118,8 +100,6 @@ class PositionTool(Pane):
         :param stop:            New stop-loss price.
         :param target:          New take-profit price.
         :param end_time:        New right-edge timestamp (``None`` skips update).
-        :param account_balance: New account balance.
-        :param risk_percent:    New risk percentage.
         """
         # Build a JS object literal from only the supplied arguments
         parts: list[str] = []
@@ -132,10 +112,6 @@ class PositionTool(Pane):
         if end_time is not None:
             ts = self._series._chart._single_datetime_format(end_time)
             parts.append(f'endTime: {ts}')
-        if account_balance is not None:
-            parts.append(f'accountBalance: {account_balance}')
-        if risk_percent is not None:
-            parts.append(f'riskPercent: {risk_percent}')
 
         if parts:
             self.run_script(f'{self.id}.applyOptions({{{", ".join(parts)}}})')

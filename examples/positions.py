@@ -2,46 +2,38 @@
 positions.py
 ============
 
-Demonstrates the PositionTool plugin:
-  - Creating a LONG risk/reward overlay on a candlestick chart.
-  - The right edge auto-tracks every new incoming bar.
-  - Mid-trade: stop is trailed to break-even once price is in profit.
-  - The overlay is removed when the take-profit price is reached.
+Demonstrates the PositionTool plugin via the marker-like API:
+  - ``position_list()`` to set multiple historical positions at once.
+  - ``position()`` to add a single live position and get back an id.
+  - ``remove_position(id)`` to delete an overlay when it is no longer needed.
+
+Two historical positions are loaded via ``position_list()``.
+A third (live) position is opened with ``position()`` as bars stream in.
+The live overlay is removed when the take-profit price is reached.
 
 Data: Tesla (TSLA) daily OHLCV, March 2023.
 """
 
-import os
 import pandas as pd
 from time import sleep
-from lightweight_charts import Chart, PositionTool
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
-HERE = os.path.dirname(os.path.abspath(__file__))
-CSV  = os.path.join(HERE, '1_setting_data', 'ohlcv.csv')
+from lightweight_charts import Chart
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ENTRY_IDX      = 2960          # bar index used as "entry" bar
-ENTRY_PRICE    = 183.86
-STOP_PRICE     = 175.00        # below the recent swing low
-TARGET_PRICE   = 202.00        # ~1 : 2  R:R
-BE_TRIGGER     = 192.00        # move stop to break-even above this price
-ACCOUNT_BAL    = 10_000.00     # USD
-RISK_PCT       = 1.5           # 1.5 % of account per trade
-STREAM_DELAY   = 10          # seconds between streamed candles
+ENTRY_IDX    = 1700         # bar index used as the live entry bar
+ENTRY_PRICE  = 2360.00
+STOP_PRICE   = 2390.00      # short position: stop above entry
+TARGET_PRICE = 2335.00      # short target below entry  (~1:2 R:R)
+STREAM_DELAY = 0            # seconds between streamed candles
 
 if __name__ == '__main__':
-    df = pd.read_csv(CSV, index_col=0)
-    df.columns = [c.strip() for c in df.columns]
-    df = df.rename(columns={'date': 'time'})
-    df['time'] = pd.to_datetime(df['time'])
+    df = pd.read_csv('data.csv')
 
     # Split: everything up-to-and-including the entry bar is "historical"
     history   = df.iloc[:ENTRY_IDX + 1].copy()
     live_feed = df.iloc[ENTRY_IDX + 1:].copy()
 
     # ── Build chart ───────────────────────────────────────────────────────────
-    chart = Chart(title='PositionTool demo – TSLA daily')
+    chart = Chart(title='PositionTool demo - TSLA daily')
     chart.candle_style(
         up_color='#26a69a', down_color='#ef5350',
         wick_up_color='#26a69a', wick_down_color='#ef5350',
@@ -49,38 +41,47 @@ if __name__ == '__main__':
     chart.set(history)
     chart.fit()
 
-    # ── Create long position ──────────────────────────────────────────────────
-    entry_bar  = history.iloc[-1]
-    entry_time = entry_bar['time']
+    # ── Historical positions via position_list() ──────────────────────────────
+    hist_ids = chart.position_list([
+        {
+            'entry':      2100.00,
+            'stop':       2050.00,
+            'target':     2200.00,
+            'entry_time': df.iloc[1600]['time'],
+            'end_time':   df.iloc[1650]['time'],    # pinned right edge
+        },
+        {
+            'entry':        2250.00,
+            'stop':         2300.00,
+            'target':       2150.00,
+            'entry_time':   df.iloc[1650]['time'],
+            'end_time':     df.iloc[1690]['time'],
+            'stop_color':   'rgba(239, 83, 80, 0.15)',
+            'target_color': 'rgba(38, 166, 154, 0.15)',
+        },
+    ])
 
-    position = PositionTool(
-        series         = chart,
-        entry          = ENTRY_PRICE,
-        stop           = STOP_PRICE,
-        target         = TARGET_PRICE,
-        entry_time     = entry_time,
-        # endTime omitted → auto-tracks the latest bar
-        account_balance = ACCOUNT_BAL,
-        risk_percent    = RISK_PCT,
+    # ── Live position via position() ──────────────────────────────────────────
+    entry_time = history.iloc[-1]['time']
+    live_id = chart.position(
+        entry=ENTRY_PRICE,
+        stop=STOP_PRICE,
+        target=TARGET_PRICE,
+        entry_time=entry_time,
+        # end_time omitted - auto-tracks the latest bar
     )
 
-    chart.show()
+    chart.show(block=False)
 
     # ── Stream live bars ──────────────────────────────────────────────────────
-    stop_moved_to_be = False
-
     for _, bar in live_feed.iterrows():
         close = bar['close']
         chart.update(bar)
 
-        # Trail stop to break-even once price is sufficiently in profit
-        if not stop_moved_to_be and close >= BE_TRIGGER:
-            position.update(stop=round(ENTRY_PRICE, 2))
-            stop_moved_to_be = True
-
-        # Remove the overlay when target is hit
-        if close >= TARGET_PRICE:
-            position.delete()
-            break
+        # Remove the live overlay when target is reached
+        if close <= TARGET_PRICE and live_id in chart.positions:
+            chart.remove_position(live_id)
 
         sleep(STREAM_DELAY)
+
+    chart.show(block=True)

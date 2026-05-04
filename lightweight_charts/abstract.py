@@ -151,6 +151,7 @@ class SeriesCommon(_PaneBase):
         self.offset = 0
         self.data = pd.DataFrame()
         self.markers = {}
+        self.positions = {}
         self.pane_index = pane_index
         self._data_changed_handler_id: Optional[str] = None
         if hasattr(chart, '_series_registry'):
@@ -357,6 +358,70 @@ class SeriesCommon(_PaneBase):
         """
         self.markers.pop(marker_id)
         self._update_markers()
+
+    def position_list(self, positions: list) -> list:
+        """
+        Creates multiple position overlays.\n
+        :param positions: list of dicts with keys: ``entry``, ``stop``, ``target``,
+            ``entry_time``, and optionally ``end_time``, ``stop_color``,
+            ``target_color``.\n
+        :return: list of position ids.
+        """
+        ids = []
+        for pos in positions:
+            pid = self.position(
+                entry=pos['entry'],
+                stop=pos['stop'],
+                target=pos['target'],
+                entry_time=pos['entry_time'],
+                end_time=pos.get('end_time'),
+                stop_color=pos.get('stop_color', 'rgba(239, 83, 80, 0.25)'),
+                target_color=pos.get('target_color', 'rgba(38, 166, 154, 0.25)'),
+            )
+            ids.append(pid)
+        return ids
+
+    def position(
+        self,
+        entry: NUM,
+        stop: NUM,
+        target: NUM,
+        entry_time: TIME,
+        end_time: Optional[TIME] = None,
+        stop_color: str = 'rgba(239, 83, 80, 0.25)',
+        target_color: str = 'rgba(38, 166, 154, 0.25)',
+    ) -> str:
+        """
+        Creates a new position overlay.\n
+        :param entry:        Entry price.
+        :param stop:         Stop-loss price.
+        :param target:       Take-profit price.
+        :param entry_time:   Timestamp of the entry bar (left edge).
+        :param end_time:     Optional right-edge timestamp. ``None`` = auto-track.
+        :param stop_color:   Fill colour of the risk zone rectangle.
+        :param target_color: Fill colour of the reward zone rectangle.
+        :return: The id of the position overlay.
+        """
+        from .plugins.position_tool import PositionTool as _PositionTool
+        position_id = self.win._id_gen.generate()
+        pt = _PositionTool(
+            series=self,
+            entry=entry,
+            stop=stop,
+            target=target,
+            entry_time=entry_time,
+            end_time=end_time,
+            stop_color=stop_color,
+            target_color=target_color,
+        )
+        self.positions[position_id] = pt
+        return position_id
+
+    def remove_position(self, position_id: str) -> None:
+        """
+        Removes the position overlay with the given id.\n
+        """
+        self.positions.pop(position_id).delete()
 
     def horizontal_line(
         self,

@@ -35,6 +35,7 @@ export abstract class PluginBase implements ISeriesPrimitive<Time> {
 	}
 
 	public detached() {
+		this._series?.unsubscribeDataChanged(this._fireDataUpdated);
 		this._chart = undefined;
 		this._series = undefined;
 		this._requestUpdate = undefined;
