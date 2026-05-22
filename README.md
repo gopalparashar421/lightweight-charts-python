@@ -239,6 +239,40 @@ if __name__ == '__main__':
 ![callbacks gif](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/examples/6_callbacks/callbacks.gif)
 ___
 
+## Streaming Mode
+
+`StreamChart` serves a chart over HTTP/WebSocket so you can view it in any browser — no desktop window required.
+
+### Installation
+
+```
+pip install lightweight-charts[stream]
+```
+
+### Usage
+
+```python
+import pandas as pd
+from lightweight_charts import StreamChart
+
+chart = StreamChart()
+df = pd.read_csv('ohlcv.csv')   # columns: time | open | high | low | close | volume
+chart.set(df)
+chart.show(port=8080, block=True)
+```
+
+Running the script prints a URL such as:
+
+```
+Chart server running at http://127.0.0.1:8080/?token=<64-hex-chars> — press Ctrl+C to stop
+```
+
+Open that URL in your browser to view the chart.  The URL contains a one-time security token — keep it private and do not share it.
+
+> **Tip:** pass `open_browser=True` to `chart.show()` to launch the browser automatically.
+> **Network access:** bind to `host='0.0.0.0'` for LAN access; a warning will be printed reminding you to keep the token URL private.
+___
+
 <div align="center">
 
 [![Documentation](https://img.shields.io/badge/documentation-006ee3)](https://lightweight-charts-python.readthedocs.io/en/latest/index.html)
