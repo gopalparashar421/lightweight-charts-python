@@ -5,13 +5,19 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="lightweight-charts",
-    version="3.0",
+    version="4.0.0",
     packages=find_packages(),
     python_requires=">=3.8",
     install_requires=[
         "pandas",
         "pywebview>=5.0.5",
     ],
+    extras_require={
+        "stream": [
+            "fastapi>=0.100,<1.0",
+            "uvicorn[standard]>=0.23",
+        ]
+    },
     package_data={
         "lightweight_charts": ["js/*"],
     },
