@@ -11,17 +11,7 @@ from .plugins import (
     PositionTool,
 )
 
-try:
-    from .stream import StreamChart
-except ImportError:
-    class StreamChart:  # type: ignore[no-redef]
-        """Placeholder: install lightweight-charts[stream] to use StreamChart."""
-
-        def __new__(cls, *args, **kwargs):
-            raise ImportError(
-                "StreamChart requires optional dependencies. "
-                "Install them with: pip install lightweight-charts[stream]"
-            )
+from .stream import StreamChart
 
 __all__ = [
     'AbstractChart',

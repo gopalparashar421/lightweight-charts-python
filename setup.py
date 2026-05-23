@@ -11,13 +11,9 @@ setup(
     install_requires=[
         "pandas",
         "pywebview>=5.0.5",
+        "fastapi>=0.100,<1.0",
+        "uvicorn[standard]>=0.23",
     ],
-    extras_require={
-        "stream": [
-            "fastapi>=0.100,<1.0",
-            "uvicorn[standard]>=0.23",
-        ]
-    },
     package_data={
         "lightweight_charts": ["js/*"],
     },

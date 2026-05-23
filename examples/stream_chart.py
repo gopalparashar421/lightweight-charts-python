@@ -11,9 +11,7 @@ How to use
        python examples/stream_chart.py
 
 2. Open the printed URL in your browser, e.g.:
-       http://127.0.0.1:8080/?token=<64-hex-chars>
-
-   The URL contains a security token — keep it private.
+       http://127.0.0.1:8080/
 
 Tips
 ----
@@ -22,7 +20,7 @@ Tips
 
 - To allow LAN / network access use host='0.0.0.0':
       chart.show(port=8080, host='0.0.0.0', block=True)
-  WARNING: This exposes the server on your network. Keep the token URL private.
+  WARNING: This exposes the server on your network.
 """
 import os
 import pandas as pd

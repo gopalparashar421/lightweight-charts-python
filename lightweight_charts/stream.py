@@ -19,17 +19,11 @@ import threading
 import time
 import webbrowser
 
-try:
-    import fastapi
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-    from fastapi.responses import FileResponse
-    from fastapi.staticfiles import StaticFiles
-    import uvicorn
-except ImportError as _stream_import_error:
-    raise ImportError(
-        "StreamChart requires optional dependencies. "
-        "Install them with: pip install lightweight-charts[stream]"
-    ) from _stream_import_error
+import fastapi
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+import uvicorn
 
 from .abstract import AbstractChart, Window
 from .util import BulkRunScript, parse_event_message
