@@ -12,7 +12,7 @@ ___
 
 
 
-```{py:method} set(data: pd.DataFrame) 
+```{py:method} set(data: pd.DataFrame)
 
 Sets the data for the histogram.
 

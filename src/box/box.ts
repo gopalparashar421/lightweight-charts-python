@@ -149,5 +149,3 @@ export class Box extends TwoPointDrawing {
             mouseY > mainY-halfTolerance && mouseY < mainY+height+halfTolerance;
     }
 }
-
-

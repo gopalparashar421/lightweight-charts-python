@@ -1,14 +1,13 @@
-import json
-import inspect
 import asyncio
+import inspect
+import json
 import os
 from base64 import b64decode
 from datetime import datetime
-from typing import Callable, Union, Literal, List, Optional
+from typing import Callable, List, Literal, Optional, Union
+
 import pandas as pd
 
-from .table import Table
-from .toolbox import ToolBox
 from .drawings import (
     Box,
     HorizontalLine,
@@ -18,28 +17,32 @@ from .drawings import (
     VerticalLine,
     VerticalSpan,
 )
+from .table import Table
+from .toolbox import ToolBox
 from .topbar import TopBar
 from .util import (
+    CROSSHAIR_MODE,
+    FLOAT,
+    LAST_PRICE_ANIMATION_MODE,
+    LINE_STYLE,
+    LINE_TYPE,
+    MARKER_POSITION,
+    MARKER_SHAPE,
+    NUM,
+    PRICE_SCALE_MODE,
+    TIME,
     BulkRunScript,
-    Pane as _PaneBase,
     Events,
     IDGen,
     as_enum,
     jbool,
+    js_data,
     js_json,
-    TIME,
-    NUM,
-    FLOAT,
-    LINE_STYLE,
-    LINE_TYPE,
-    LAST_PRICE_ANIMATION_MODE,
-    MARKER_POSITION,
-    MARKER_SHAPE,
-    CROSSHAIR_MODE,
-    PRICE_SCALE_MODE,
     marker_position,
     marker_shape,
-    js_data,
+)
+from .util import (
+    Pane as _PaneBase,
 )
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -154,7 +157,7 @@ class SeriesCommon(_PaneBase):
         self.positions = {}
         self.pane_index = pane_index
         self._data_changed_handler_id: Optional[str] = None
-        if hasattr(chart, '_series_registry'):
+        if hasattr(chart, "_series_registry"):
             chart._series_registry.append(self)
 
     def legend(
@@ -171,7 +174,13 @@ class SeriesCommon(_PaneBase):
         Configures the legend for the pane this series lives on.
         OHLC and percent are intentionally omitted — use chart.legend() on pane 0 for those.
         """
-        pane_idx = pane_index if pane_index is not None else self.pane_index if self.pane_index is not None else 0
+        pane_idx = (
+            pane_index
+            if pane_index is not None
+            else self.pane_index
+            if self.pane_index is not None
+            else 0
+        )
         self._chart.legend(
             visible=visible,
             ohlc=False,
@@ -284,10 +293,14 @@ class SeriesCommon(_PaneBase):
             self.data.loc[self.data.index[-1]] = self._last_bar
             self.data = pd.concat([self.data, series.to_frame().T], ignore_index=True)
         self._last_bar = series
-        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historicalUpdate)});")
+        self.run_script(
+            f"{self.id}.series.update({js_data(series)}, {jbool(historicalUpdate)});"
+        )
 
     def _update_markers(self):
-        self.run_script(f'{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})')
+        self.run_script(
+            f"{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})"
+        )
 
     def marker_list(self, markers: list):
         """
@@ -370,13 +383,13 @@ class SeriesCommon(_PaneBase):
         ids = []
         for pos in positions:
             pid = self.position(
-                entry=pos['entry'],
-                stop=pos['stop'],
-                target=pos['target'],
-                entry_time=pos['entry_time'],
-                end_time=pos.get('end_time'),
-                stop_color=pos.get('stop_color', 'rgba(239, 83, 80, 0.25)'),
-                target_color=pos.get('target_color', 'rgba(38, 166, 154, 0.25)'),
+                entry=pos["entry"],
+                stop=pos["stop"],
+                target=pos["target"],
+                entry_time=pos["entry_time"],
+                end_time=pos.get("end_time"),
+                stop_color=pos.get("stop_color", "rgba(239, 83, 80, 0.25)"),
+                target_color=pos.get("target_color", "rgba(38, 166, 154, 0.25)"),
             )
             ids.append(pid)
         return ids
@@ -388,8 +401,8 @@ class SeriesCommon(_PaneBase):
         target: NUM,
         entry_time: TIME,
         end_time: Optional[TIME] = None,
-        stop_color: str = 'rgba(239, 83, 80, 0.25)',
-        target_color: str = 'rgba(38, 166, 154, 0.25)',
+        stop_color: str = "rgba(239, 83, 80, 0.25)",
+        target_color: str = "rgba(38, 166, 154, 0.25)",
     ) -> str:
         """
         Creates a new position overlay.\n
@@ -403,6 +416,7 @@ class SeriesCommon(_PaneBase):
         :return: The id of the position overlay.
         """
         from .plugins.position_tool import PositionTool as _PositionTool
+
         position_id = self.win._id_gen.generate()
         pt = _PositionTool(
             series=self,
@@ -567,7 +581,9 @@ class SeriesCommon(_PaneBase):
     def options(self) -> dict:
         """Returns the current series options as a dict (blocking)."""
 
-        result = self.win.run_script_and_get(f"JSON.stringify({self.id}.series.options())")
+        result = self.win.run_script_and_get(
+            f"JSON.stringify({self.id}.series.options())"
+        )
         return json.loads(result) if isinstance(result, str) else {}
 
     def get_data(self) -> list:
@@ -583,7 +599,7 @@ class SeriesCommon(_PaneBase):
     ) -> dict:
         """Returns the data point at *logical_index* (blocking)."""
 
-        dir_map = {'nearest_left': -1, 'nearest_right': 1}
+        dir_map = {"nearest_left": -1, "nearest_right": 1}
         dir_arg = dir_map.get(mismatch_direction, 0) if mismatch_direction else 0
         result = self.win.run_script_and_get(
             f"JSON.stringify({self.id}.series.dataByIndex({int(logical_index)}, {dir_arg}))"
@@ -595,28 +611,29 @@ class SeriesCommon(_PaneBase):
         result = self.win.run_script_and_get(
             f"{self.id}.series.priceToCoordinate({float(price)})"
         )
-        return float(result) if result not in (None, 'null', 'undefined') else None
+        return float(result) if result not in (None, "null", "undefined") else None
 
     def coordinate_to_price(self, coordinate: float) -> Optional[float]:
         """Converts a y-coordinate to a price (blocking, synchronous)."""
         result = self.win.run_script_and_get(
             f"{self.id}.series.coordinateToPrice({float(coordinate)})"
         )
-        return float(result) if result not in (None, 'null', 'undefined') else None
+        return float(result) if result not in (None, "null", "undefined") else None
 
     def bars_in_logical_range(self, from_index: int, to_index: int) -> Optional[dict]:
         """Returns bars info for the given logical index range (blocking)."""
 
         result = self.win.run_script_and_get(
             f"JSON.stringify({self.id}.series.barsInLogicalRange({{from: {int(from_index)}, to: {int(to_index)}}}))".replace(
-                "\\\"from\\\"", "from").replace("\\\"to\\\"", "to")
+                '\\"from\\"', "from"
+            ).replace('\\"to\\"', "to")
         )
         return json.loads(result) if isinstance(result, str) else None
 
     def series_type(self) -> str:
         """Returns the series type string (blocking)."""
         result = self.win.run_script_and_get(f"{self.id}.series.seriesType()")
-        return str(result) if result else ''
+        return str(result) if result else ""
 
     def last_value_data(self, global_last: bool = True) -> Optional[dict]:
         """Returns data about the last visible value (blocking)."""
@@ -639,18 +656,22 @@ class SeriesCommon(_PaneBase):
         """Moves this series to the pane at *pane_index* (requires window open when pane_index is None)."""
         if pane_index is None:
             self.run_script(f"{self.id}.series.moveToPane()")
-            self.pane_index = int(self.win.run_script_and_get(
-                f"{self._chart.id}.chart.panes().indexOf({self.id}.series.getPane())"
-            ))
+            self.pane_index = int(
+                self.win.run_script_and_get(
+                    f"{self._chart.id}.chart.panes().indexOf({self.id}.series.getPane())"
+                )
+            )
         else:
             self.run_script(f"{self.id}.series.moveToPane({int(pane_index)})")
             self.pane_index = pane_index
 
     def get_pane(self) -> "Pane":
         """Returns the ``Pane`` for the pane this series lives on (blocking)."""
-        idx = int(self.win.run_script_and_get(
-            f"{self._chart.id}.chart.panes().indexOf({self.id}.series.getPane())"
-        ))
+        idx = int(
+            self.win.run_script_and_get(
+                f"{self._chart.id}.chart.panes().indexOf({self.id}.series.getPane())"
+            )
+        )
         return Pane(self._chart, idx)
 
     def subscribe_data_changed(self, func: Callable):
@@ -658,8 +679,8 @@ class SeriesCommon(_PaneBase):
         Subscribes to data changes on this series.
         :param func: Callable receiving this series as its first argument.
         """
-        salt = self.id.replace('window.', '')
-        handler_id = f'data_changed_{salt}'
+        salt = self.id.replace("window.", "")
+        handler_id = f"data_changed_{salt}"
         self._data_changed_handler_id = handler_id
 
         def _wrapper(*_args):
@@ -711,7 +732,7 @@ class Line(SeriesCommon):
         price_label,
         price_scale_id=None,
         crosshair_marker=True,
-        last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
+        last_price_animation: LAST_PRICE_ANIMATION_MODE = "disabled",
         pane_index: int = None,
     ):
         super().__init__(chart, name, pane_index)
@@ -729,18 +750,26 @@ class Line(SeriesCommon):
                     lastValueVisible: {jbool(price_label)},
                     priceLineVisible: {jbool(price_line)},
                     crosshairMarkerVisible: {jbool(crosshair_marker)},
-                    priceScaleId: {f'"{price_scale_id}"' if price_scale_id else 'undefined'},
-                    lastPriceAnimation: {as_enum(last_price_animation, LAST_PRICE_ANIMATION_MODE)},
-                    {"""autoscaleInfoProvider: () => ({
+                    priceScaleId: {
+                f'"{price_scale_id}"' if price_scale_id else "undefined"
+            },
+                    lastPriceAnimation: {
+                as_enum(last_price_animation, LAST_PRICE_ANIMATION_MODE)
+            },
+                    {
+                """autoscaleInfoProvider: () => ({
                             priceRange: {
                                 minValue: 1_000_000_000,
                                 maxValue: 0,
                             },
                         }),
-                    """ if chart._scale_candles_only else ''}
-                    
+                    """
+                if chart._scale_candles_only
+                else ""
+            }
+
                 }},
-                {f'{pane_index},' if pane_index is not None else '0'}
+                {f"{pane_index}," if pane_index is not None else "0"}
             )
         null'''
         )
@@ -794,7 +823,7 @@ class Area(SeriesCommon):
         price_label,
         price_scale_id=None,
         crosshair_marker=True,
-        last_price_animation: LAST_PRICE_ANIMATION_MODE = 'disabled',
+        last_price_animation: LAST_PRICE_ANIMATION_MODE = "disabled",
         pane_index: int = None,
     ):
         super().__init__(chart, name, pane_index)
@@ -810,7 +839,7 @@ class Area(SeriesCommon):
                     lastValueVisible: {jbool(price_label)},
                     priceLineVisible: {jbool(price_line)},
                     crosshairMarkerVisible: {jbool(crosshair_marker)},
-                    priceScaleId: {f'"{price_scale_id}"' if price_scale_id else 'undefined'},
+                    priceScaleId: {f'"{price_scale_id}"' if price_scale_id else "undefined"},
                     lastPriceAnimation: {as_enum(last_price_animation, LAST_PRICE_ANIMATION_MODE)},
                 }},
                 {pane_index if pane_index is not None else 0}
@@ -819,9 +848,9 @@ class Area(SeriesCommon):
         )
 
     _AREA_COLOR_RENAME = {
-        'line_color': 'lineColor',
-        'top_color': 'topColor',
-        'bottom_color': 'bottomColor',
+        "line_color": "lineColor",
+        "top_color": "topColor",
+        "bottom_color": "bottomColor",
     }
 
     def set(self, df: Optional[pd.DataFrame] = None, format_cols: bool = True):
@@ -960,7 +989,9 @@ class Pane(_PaneBase):
         Returns the list of ``SeriesCommon`` objects on this pane that are
         tracked in the parent chart's series registry.
         """
-        return [s for s in self._chart._series_registry if s.pane_index == self._pane_index]
+        return [
+            s for s in self._chart._series_registry if s.pane_index == self._pane_index
+        ]
 
     def attach_primitive(self, js_constructor_call: str) -> "AttachedPanePrimitive":
         """
@@ -976,24 +1007,22 @@ class Pane(_PaneBase):
 
     def price_scale(self, price_scale_id: str):
         """Returns a JS price scale reference expression (not a Python object)."""
-        self.run_script(
-            f"{self._pane_expr()}.priceScale('{price_scale_id}')"
-        )
+        self.run_script(f"{self._pane_expr()}.priceScale('{price_scale_id}')")
 
     def set_preserve_empty_pane(self, preserve: bool):
         """Sets whether this pane is preserved when all its series are removed."""
-        self.run_script(
-            f"{self._pane_expr()}.setPreserveEmptyPane({jbool(preserve)})"
-        )
+        self.run_script(f"{self._pane_expr()}.setPreserveEmptyPane({jbool(preserve)})")
 
     def preserve_empty_pane(self) -> bool:
         """Returns whether the empty-pane preservation flag is set (blocking)."""
         result = self.win.run_script_and_get(f"{self._pane_expr()}.preserveEmptyPane()")
-        return result is True or result == 'true'
+        return result is True or result == "true"
 
     def get_stretch_factor(self) -> float:
         """Returns the relative height factor of this pane (blocking)."""
-        return float(self.win.run_script_and_get(f"{self._pane_expr()}.getStretchFactor()"))
+        return float(
+            self.win.run_script_and_get(f"{self._pane_expr()}.getStretchFactor()")
+        )
 
     def set_stretch_factor(self, factor: float):
         """Sets the relative height factor of this pane."""
@@ -1044,7 +1073,7 @@ class Histogram(SeriesCommon):
                 priceScaleId: '{price_scale_id or self.id}',
                 priceFormat: {{type: "volume"}},
             }},
-            {f'{pane_index}' if pane_index is not None else '0'}
+            {f"{pane_index}" if pane_index is not None else "0"}
         )
         {self.id}.series.priceScale().applyOptions({{
             scaleMargins: {{top:{scale_margin_top}, bottom: {scale_margin_bottom}}}
@@ -1121,7 +1150,7 @@ class Candlestick(SeriesCommon):
         # set autoScale to true in case the user has dragged the price scale
         self.run_script(
             f"""
-            if (!{self.id}.chart.priceScale("right")?.options?.autoScale) // precision: 2, 
+            if (!{self.id}.chart.priceScale("right")?.options?.autoScale) // precision: 2,
                 {self.id}.chart.priceScale("right").applyOptions({{autoScale: true}})
         """
         )
@@ -1216,8 +1245,8 @@ class Candlestick(SeriesCommon):
                 alignLabels: {jbool(align_labels)},
                 scaleMargins: {{top: {scale_margin_top}, bottom: {scale_margin_bottom}}},
                 borderVisible: {jbool(border_visible)},
-                {f'borderColor: "{border_color}",' if border_color else ''}
-                {f'textColor: "{text_color}",' if text_color else ''}
+                {f'borderColor: "{border_color}",' if border_color else ""}
+                {f'textColor: "{text_color}",' if text_color else ""}
                 entireTextOnly: {jbool(entire_text_only)},
                 visible: {jbool(visible)},
                 ticksVisible: {jbool(ticks_visible)},
@@ -1322,7 +1351,7 @@ class AbstractChart(Candlestick, _PaneBase):
         price_label: bool = True,
         price_scale_id: Optional[str] = None,
         pane_index: int = None,
-        last_price_animation: str = 'disabled',
+        last_price_animation: str = "disabled",
     ) -> Line:
         """
         Creates and returns a Line object.
@@ -1460,9 +1489,9 @@ class AbstractChart(Candlestick, _PaneBase):
             {self.id}.chart.applyOptions({{
             layout: {{
                 background: {{color: "{background_color}"}},
-                {f'textColor: "{text_color}",' if text_color else ''}
-                {f'fontSize: {font_size},' if font_size else ''}
-                {f'fontFamily: "{font_family}",' if font_family else ''}
+                {f'textColor: "{text_color}",' if text_color else ""}
+                {f"fontSize: {font_size}," if font_size else ""}
+                {f'fontFamily: "{font_family}",' if font_family else ""}
             }}}})"""
         )
 
@@ -1519,14 +1548,14 @@ class AbstractChart(Candlestick, _PaneBase):
                 vertLine: {{
                     visible: {jbool(vert_visible)},
                     width: {vert_width},
-                    {f'color: "{vert_color}",' if vert_color else ''}
+                    {f'color: "{vert_color}",' if vert_color else ""}
                     style: {as_enum(vert_style, LINE_STYLE)},
                     labelBackgroundColor: "{vert_label_background_color}"
                 }},
                 horzLine: {{
                     visible: {jbool(horz_visible)},
                     width: {horz_width},
-                    {f'color: "{horz_color}",' if horz_color else ''}
+                    {f'color: "{horz_color}",' if horz_color else ""}
                     style: {as_enum(horz_style, LINE_STYLE)},
                     labelBackgroundColor: "{horz_label_background_color}"
                 }}
@@ -1534,11 +1563,15 @@ class AbstractChart(Candlestick, _PaneBase):
         }})"""
         )
 
-    def watermark(self, text: str, font_size: int = 44, color: str = 'rgba(180, 180, 200, 0.5)'):
+    def watermark(
+        self, text: str, font_size: int = 44, color: str = "rgba(180, 180, 200, 0.5)"
+    ):
         """
         Adds a watermark to the chart.
         """
-        self.run_script(f'''{self._chart.id}.createWatermark('{text}', {font_size}, '{color}')''')
+        self.run_script(
+            f"""{self._chart.id}.createWatermark('{text}', {font_size}, '{color}')"""
+        )
 
     def legend(
         self,
@@ -1697,18 +1730,18 @@ class AbstractChart(Candlestick, _PaneBase):
     def auto_size_active(self) -> bool:
         """Returns whether autosize is currently active (blocking)."""
         result = self.win.run_script_and_get(f"{self.id}.chart.autoSizeActive()")
-        return result is True or result == 'true'
+        return result is True or result == "true"
 
     def subscribe_dbl_click(self, func: Callable):
         """
         Subscribes to double-click events on the chart.
         :param func: Callable receiving ``(chart, time, price)`` arguments.
         """
-        salt = self.id.replace('window.', '')
-        handler_id = f'dbl_click_{salt}'
+        salt = self.id.replace("window.", "")
+        handler_id = f"dbl_click_{salt}"
 
         def _wrapper(chart, *args):
-            parsed = [float(a) if a != 'null' else None for a in args]
+            parsed = [float(a) if a != "null" else None for a in args]
             if inspect.iscoroutinefunction(func):
                 asyncio.create_task(func(chart, *parsed))
             else:
@@ -1730,8 +1763,8 @@ class AbstractChart(Candlestick, _PaneBase):
 
     def unsubscribe_dbl_click(self):
         """Unsubscribes from double-click events."""
-        salt = self.id.replace('window.', '')
-        self.win.handlers.pop(f'dbl_click_{salt}', None)
+        salt = self.id.replace("window.", "")
+        self.win.handlers.pop(f"dbl_click_{salt}", None)
         self.run_script(f"""
             if (typeof {self.id}._dblClickHandler !== 'undefined') {{
                 {self.id}.chart.unsubscribeDblClick({self.id}._dblClickHandler);
@@ -1746,7 +1779,11 @@ class AbstractChart(Candlestick, _PaneBase):
         :param time: The time value (will be converted to unix seconds).
         :param series: The series the crosshair should snap to.
         """
-        ts = int(pd.Timestamp(time).value // 10**9) if not isinstance(time, (int, float)) else int(time)
+        ts = (
+            int(pd.Timestamp(time).value // 10**9)
+            if not isinstance(time, (int, float))
+            else int(time)
+        )
         self.run_script(
             f"{self.id}.chart.setCrosshairPosition({float(price)}, {ts}, {series.id}.series)"
         )

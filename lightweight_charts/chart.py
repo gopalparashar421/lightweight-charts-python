@@ -3,11 +3,13 @@ import inspect
 import json
 import multiprocessing as mp
 import typing
+
 import webview
 from webview.errors import JavascriptException
 
 from lightweight_charts import abstract
-from .util import parse_event_message, FLOAT
+
+from .util import FLOAT, parse_event_message
 
 
 class CallbackAPI:
@@ -91,7 +93,6 @@ class PyWV:
                             window.evaluate_js(arg)
 
                         except webview.errors.JavascriptException as e:
-
                             # print(f"Js: {str(arg)}")
                             print(f"JavaScript Error 1: {e}")  # Debugging output
                 except KeyError as e:

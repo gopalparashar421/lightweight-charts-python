@@ -36,15 +36,15 @@ chart.show(block=True)   # block=True keeps the process alive
 chart.show()
 ```
 
-`Chart(toolbox=True)` enables the drawing toolbox.  
-`Chart(title='My Chart')` sets the window title.  
+`Chart(toolbox=True)` enables the drawing toolbox.
+`Chart(title='My Chart')` sets the window title.
 `Chart(inner_height=1)` is required when using multi-pane layouts.
 
 ---
 
 ## 2. Loading OHLCV Data
 
-DataFrame columns: `time | open | high | low | close | volume`  
+DataFrame columns: `time | open | high | low | close | volume`
 `time` can be a string, `datetime`, or `pd.Timestamp`.
 
 ```python
@@ -168,7 +168,7 @@ for _, tick in ticks.iterrows():
 
 ## 6. Multi-Pane Layout
 
-Use `pane_index` to place series in separate panes.  
+Use `pane_index` to place series in separate panes.
 Instantiate the chart with `Chart(inner_height=1)`.
 
 `create_subchart` has been **removed**. Use `chart.add_pane()` and `pane_index` instead.
@@ -371,7 +371,7 @@ heatmap.set(heatmap_df)
 ```
 
 ### HeatmapSeries — orderbook mode
-Supply custom JS shaders and use `set(time, bids, asks)` / `update(time, bids, asks)`.  
+Supply custom JS shaders and use `set(time, bids, asks)` / `update(time, bids, asks)`.
 `bids` and `asks` are lists of `(price_str, amount_int)` tuples.
 
 ```python

@@ -119,7 +119,7 @@ export class ToolBox {
             this._drawingTool?.stopDrawing()
             if (this.activeIcon === icon) {
                 this.activeIcon = null
-                return 
+                return
             }
         }
         this.activeIcon = icon

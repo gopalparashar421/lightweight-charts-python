@@ -196,8 +196,8 @@ if (!window.Chart) {
                     let finalString = '<span style="line-height: 1.8;">'
                     if (data) {
                         this.candle.style.color = ''
-                        let ohlc = `O ${legendItemFormat(data.open, chart.precision)} 
-                                | H ${legendItemFormat(data.high, chart.precision)} 
+                        let ohlc = `O ${legendItemFormat(data.open, chart.precision)}
+                                | H ${legendItemFormat(data.high, chart.precision)}
                                 | L ${legendItemFormat(data.low, chart.precision)}
                                 | C ${legendItemFormat(data.close, chart.precision)} `
                         let percentMove = ((data.close - data.open) / data.open) * 100

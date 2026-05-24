@@ -57,6 +57,3 @@ Exports all currently saved drawings to the JSON file given in `file_path`.
 ```
 
 `````
-
-
-

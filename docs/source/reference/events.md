@@ -30,4 +30,3 @@ Fires when the mouse is clicked, returning the time and price of the clicked loc
 ````
 
 Tutorial: [Topbar & Events](../tutorials/events.md)
-

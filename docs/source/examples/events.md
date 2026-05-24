@@ -43,14 +43,14 @@ def on_search(chart, searched_string):
     chart.topbar['symbol'].set(searched_string)
     chart.set(new_data)
 
-    
+
 def on_timeframe_selection(chart):
     new_data = get_bar_data(chart.topbar['symbol'].value, chart.topbar['timeframe'].value)
     if new_data.empty:
         return
     chart.set(new_data, True)
 
-    
+
 def on_horizontal_line_move(chart, line):
     print(f'Horizontal line moved to: {line.price}')
 
@@ -58,7 +58,7 @@ def on_horizontal_line_move(chart, line):
 if __name__ == '__main__':
     chart = Chart(toolbox=True)
     chart.legend(True)
-    
+
     chart.events.search += on_search
 
     chart.topbar.textbox('symbol', 'TSLA')

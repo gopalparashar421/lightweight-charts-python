@@ -132,11 +132,3 @@ table.footer(3, func=on_footer_click)
 ```
 
 ````
-
-
-
-
-
-
-
-

@@ -65,7 +65,7 @@ if __name__ == '__main__':
     df = pd.read_csv('ohlcv.csv')
     chart.set(df)
     chart.show()
-    
+
     img = chart.screenshot()
     with open('screenshot.png', 'wb') as f:
         f.write(img)
@@ -151,7 +151,7 @@ ___
 
 ```{py:method} load()
 
-Renders the chart. This should be called after setting, styling, and configuring the chart, as no further calls to the `JupyterChart` will be acknowledged. 
+Renders the chart. This should be called after setting, styling, and configuring the chart, as no further calls to the `JupyterChart` will be acknowledged.
 
 ```
 ````

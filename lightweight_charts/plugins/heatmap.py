@@ -1,5 +1,6 @@
 import json
-from typing import Optional, List
+from typing import List, Optional
+
 import pandas as pd
 
 from ..util import Pane
@@ -43,9 +44,9 @@ class HeatmapSeries(Pane):
         chart,
         cell_shader_js: Optional[str] = None,
         cell_border_width: int = 1,
-        cell_border_color: str = 'transparent',
-        bid_color: str = 'rgba(0, 160, 80, 0.6)',
-        ask_color: str = 'rgba(200, 50, 50, 0.6)',
+        cell_border_color: str = "transparent",
+        bid_color: str = "rgba(0, 160, 80, 0.6)",
+        ask_color: str = "rgba(200, 50, 50, 0.6)",
         bid_shader_js: Optional[str] = None,
         ask_shader_js: Optional[str] = None,
         pane_index: int = 0,
@@ -56,11 +57,13 @@ class HeatmapSeries(Pane):
         self._ask_color = ask_color
         self._bid_shader_js = bid_shader_js
         self._ask_shader_js = ask_shader_js
-        view_var = self.id + 'V'
-        base_opts = json.dumps({
-            'cellBorderWidth': cell_border_width,
-            'cellBorderColor': cell_border_color,
-        })
+        view_var = self.id + "V"
+        base_opts = json.dumps(
+            {
+                "cellBorderWidth": cell_border_width,
+                "cellBorderColor": cell_border_color,
+            }
+        )
         # Strip the trailing '}' so we can append optional function fields
         opts_str = base_opts[:-1]
         if cell_shader_js:
@@ -69,11 +72,11 @@ class HeatmapSeries(Pane):
             opts_str += f', "bidShader": {bid_shader_js}'
         if ask_shader_js:
             opts_str += f', "askShader": {ask_shader_js}'
-        opts_str += '}'
-        self.run_script(f'''
+        opts_str += "}"
+        self.run_script(f"""
             {view_var} = new Lib.HeatMapSeries();
             {self.id} = {chart.id}.chart.addCustomSeries({view_var}, {opts_str}, {pane_index});
-        null''')
+        null""")
 
     def _set(self, df: pd.DataFrame):
         """
@@ -84,19 +87,19 @@ class HeatmapSeries(Pane):
             the same ``time`` are grouped into one bar.
         """
         if df is None or df.empty:
-            self.run_script(f'{self.id}.setData([])')
+            self.run_script(f"{self.id}.setData([])")
             return
         df = df.copy()
-        if 'value' in df.columns and 'amount' not in df.columns:
-            df = df.rename(columns={'value': 'amount'})
-        if not pd.api.types.is_datetime64_any_dtype(df['time']):
-            df['time'] = pd.to_datetime(df['time'])
-        df['time'] = df['time'].astype('int64') // 10 ** 9
+        if "value" in df.columns and "amount" not in df.columns:
+            df = df.rename(columns={"value": "amount"})
+        if not pd.api.types.is_datetime64_any_dtype(df["time"]):
+            df["time"] = pd.to_datetime(df["time"])
+        df["time"] = df["time"].astype("int64") // 10**9
         records = []
-        for t, group in df.groupby('time', sort=True):
-            cells = group[['low', 'high', 'amount']].to_dict('records')
-            records.append({'time': int(t), 'cells': cells})
-        self.run_script(f'{self.id}.setData({json.dumps(records)})')
+        for t, group in df.groupby("time", sort=True):
+            cells = group[["low", "high", "amount"]].to_dict("records")
+            records.append({"time": int(t), "cells": cells})
+        self.run_script(f"{self.id}.setData({json.dumps(records)})")
 
     def set(
         self,
@@ -114,18 +117,25 @@ class HeatmapSeries(Pane):
         cells = []
         for price, size in bids:
             p = float(price)
-            cell: dict = {'low': p, 'high': p + 1.0, 'amount': float(size), 'side': 'bid'}
+            cell: dict = {
+                "low": p,
+                "high": p + 1.0,
+                "amount": float(size),
+                "side": "bid",
+            }
             if not self._bid_shader_js:
-                cell['color'] = self._bid_color
+                cell["color"] = self._bid_color
             cells.append(cell)
         for price, size in asks:
             p = float(price)
-            cell = {'low': p, 'high': p + 1.0, 'amount': float(size), 'side': 'ask'}
+            cell = {"low": p, "high": p + 1.0, "amount": float(size), "side": "ask"}
             if not self._ask_shader_js:
-                cell['color'] = self._ask_color
+                cell["color"] = self._ask_color
             cells.append(cell)
         ts = int(pd.Timestamp(time).timestamp())
-        self.run_script(f'{self.id}.setData({json.dumps([{"time": ts, "cells": cells}])})')
+        self.run_script(
+            f"{self.id}.setData({json.dumps([{'time': ts, 'cells': cells}])})"
+        )
 
     def update(
         self,
@@ -143,15 +153,20 @@ class HeatmapSeries(Pane):
         cells = []
         for price, size in bids:
             p = float(price)
-            cell: dict = {'low': p, 'high': p + 1.0, 'amount': float(size), 'side': 'bid'}
+            cell: dict = {
+                "low": p,
+                "high": p + 1.0,
+                "amount": float(size),
+                "side": "bid",
+            }
             if not self._bid_shader_js:
-                cell['color'] = self._bid_color
+                cell["color"] = self._bid_color
             cells.append(cell)
         for price, size in asks:
             p = float(price)
-            cell = {'low': p, 'high': p + 1.0, 'amount': float(size), 'side': 'ask'}
+            cell = {"low": p, "high": p + 1.0, "amount": float(size), "side": "ask"}
             if not self._ask_shader_js:
-                cell['color'] = self._ask_color
+                cell["color"] = self._ask_color
             cells.append(cell)
         self._update(time, cells)
 
@@ -163,4 +178,4 @@ class HeatmapSeries(Pane):
         :param cells: List of ``{'low': float, 'high': float, 'amount': float}`` dicts.
         """
         ts = int(pd.Timestamp(time).timestamp())
-        self.run_script(f'{self.id}.update({json.dumps({"time": ts, "cells": cells})})')
+        self.run_script(f"{self.id}.update({json.dumps({'time': ts, 'cells': cells})})")
