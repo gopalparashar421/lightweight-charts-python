@@ -13,7 +13,7 @@ The `Table` and `Row` objects act as dictionaries, and can be manipulated as suc
 : Given as a `float` between 0 and 1.
 
 `position`
-: Used as you would with [`create_subchart`](#AbstractChart.create_subchart), representing how the table will float within the window.
+: Specifies where the table floats within the window. Accepts `'left'`, `'right'`, `'top'`, or `'bottom'`.
 
 `draggable`
 : If `True`, then the window can be dragged to any position within the window.

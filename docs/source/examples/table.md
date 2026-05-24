@@ -11,11 +11,9 @@ def on_row_click(row):
     table.footer[1] = row['Ticker']
 
 if __name__ == '__main__':
-    chart = Chart(width=1000, inner_width=0.7, inner_height=1)
-    subchart = chart.create_subchart(width=0.3, height=0.5)
+    chart = Chart(width=1000, inner_width=1, inner_height=1)
     df = pd.read_csv('ohlcv.csv')
     chart.set(df)
-    subchart.set(df)
 
     table = chart.create_table(width=0.3, height=0.2,
                   headings=('Ticker', 'Quantity', 'Status', '%', 'PL'),

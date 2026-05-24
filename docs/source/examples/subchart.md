@@ -1,16 +1,62 @@
-# Subcharts
+# Panes
 
-## Grid of 4
+Multi-pane charts are created by passing `pane_index` to series constructors, or
+by calling `chart.add_pane()` to explicitly create extra panes.
+
+> **Note:** `create_subchart` has been removed. Use the Panes API described here
+> and in the [`Pane` reference](../reference/pane.md).
+
+___
+
+## MACD Sub-Pane
+
+Add a histogram to a second pane using `pane_index=1`:
 
 ```python
 import pandas as pd
 from lightweight_charts import Chart
 
+
+def calculate_sma(df, period=50):
+    return pd.DataFrame({
+        'time': df['date'],
+        f'SMA {period}': df['close'].rolling(window=period).mean()
+    }).dropna()
+
+
+def calculate_macd(df, short=12, long=26, signal=9):
+    short_ema = df['close'].ewm(span=short, adjust=False).mean()
+    long_ema  = df['close'].ewm(span=long,  adjust=False).mean()
+    macd      = short_ema - long_ema
+    sig       = macd.ewm(span=signal, adjust=False).mean()
+    return pd.DataFrame({
+        'time':      df['date'],
+        'MACD':      macd,
+        'Signal':    sig,
+        'Histogram': macd - sig,
+    }).dropna()
+
+
 if __name__ == '__main__':
-    chart = Chart(inner_width=0.5, inner_height=0.5)
-    chart2 = chart.create_subchart(position='right', width=0.5, height=0.5)
-    chart3 = chart.create_subchart(position='left', width=0.5, height=0.5)
-    chart4 = chart.create_subchart(position='right', width=0.5, height=0.5)
+    chart = Chart(inner_height=1)
+    chart.legend(visible=True)
+
+    df = pd.read_csv('ohlcv.csv')
+    chart.set(df)
+
+    line = chart.create_line('SMA 50')
+    line.set(calculate_sma(df, 50))
+
+    # ── second pane ──────────────────────────────────────────────────────────
+    macd_data = calculate_macd(df)
+    histogram = chart.create_histogram('MACD', pane_index=1)
+    histogram.set(macd_data[['time', 'MACD', 'Signal', 'Histogram']])
+    chart.legend(visible=True, pane_index=1)
+
+    chart.show(block=True)
+```
+
+![panes image](../_static/images/panes.png)
 
     chart.watermark('1')
     chart2.watermark('2')
