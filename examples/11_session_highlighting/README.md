@@ -5,10 +5,10 @@ sessions on an hourly OHLCV candlestick chart (e.g. London / NY hours).
 
 **Screenshot**
 
-> _Screenshot pending. Run the example and add `session_highlighting.png` here._
+![session_highlighting](session_highlighting.png)
 
 ## Run
 
 ```bash
-python examples/session_highlighting/session_highlighting.py
+python examples/11_session_highlighting/session_highlighting.py
 ```

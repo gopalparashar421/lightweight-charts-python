@@ -5,10 +5,10 @@ including entry price, stop-loss, and target levels rendered as interactive over
 
 **Screenshot**
 
-> _Screenshot pending. Run the example and add `position_tool.png` here._
+![positions](positions.png)
 
 ## Run
 
 ```bash
-python examples/positions/positions.py
+python examples/16_positions/positions.py
 ```

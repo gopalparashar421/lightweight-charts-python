@@ -5,10 +5,10 @@ profile anchored at a specific bar, rendered as horizontal bars on the chart.
 
 **Screenshot**
 
-> _Screenshot pending. Run the example and add `volume_profile.png` here._
+![volume_profile](volume_profile.png)
 
 ## Run
 
 ```bash
-python examples/volume_profile/volume_profile.py
+python examples/14_volume_profile/volume_profile.py
 ```

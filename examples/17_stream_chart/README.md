@@ -5,12 +5,12 @@ Demonstrates `StreamChart` — a chart served over HTTP/WebSocket so any browser
 Instead of opening a desktop window via `pywebview`, `StreamChart` spins up a local
 FastAPI/Uvicorn server and streams data to any connected browser tab.
 
-**Screenshot / GIF**
+**Screenshot**
 
-> _Screenshot pending. Run the example and add `stream_chart.gif` here._
+![stream_chart](stream_chart.png)
 
 ## Run
 
 ```bash
-python examples/stream_chart/stream_chart.py
+python examples/17_stream_chart/stream_chart.py
 ```

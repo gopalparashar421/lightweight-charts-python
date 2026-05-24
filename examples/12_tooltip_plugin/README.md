@@ -3,12 +3,12 @@
 Demonstrates the `Tooltip` plugin with tracking mode — the tooltip follows the
 crosshair and displays OHLCV values for the bar under the cursor.
 
-**GIF**
+**Screenshot**
 
-> _Screenshot pending. Run the example and add `tooltip.gif` here._
+![tooltip_plugin](tooltip_plugin.png)
 
 ## Run
 
 ```bash
-python examples/tooltip_plugin/tooltip_plugin.py
+python examples/12_tooltip_plugin/tooltip_plugin.py
 ```

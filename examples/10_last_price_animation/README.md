@@ -5,10 +5,10 @@ using the `last_price_animation` series option introduced in Lightweight Charts 
 
 **GIF**
 
-> _Screenshot pending. Run the example and add `last_price_animation.gif` here._
+![last_price_animation](last_price_animation.gif)
 
 ## Run
 
 ```bash
-python examples/last_price_animation/last_price_animation.py
+python examples/10_last_price_animation/last_price_animation.py
 ```

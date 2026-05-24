@@ -5,10 +5,10 @@ render a filled envelope between upper and lower band series on a candlestick ch
 
 **Screenshot**
 
-> _Screenshot pending. Run the example and add `bands_indicator.png` here._
+![bands_indicator](bands_indicator.png)
 
 ## Run
 
 ```bash
-python examples/bands_indicator/bands_indicator.py
+python examples/13_bands_indicator/bands_indicator.py
 ```

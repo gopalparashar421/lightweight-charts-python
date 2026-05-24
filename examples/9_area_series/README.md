@@ -5,10 +5,10 @@ the `Area` series type with custom colours and line width options.
 
 **Screenshot**
 
-> _Screenshot pending. Run the example and add `area_series.png` here._
+![area_series](area_series.png)
 
 ## Run
 
 ```bash
-python examples/area_series/area_series.py
+python examples/9_area_series/area_series.py
 ```
