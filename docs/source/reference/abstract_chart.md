@@ -56,7 +56,7 @@ ___
 
 
 
-```{py:method} create_line(name: str, color: COLOR, style: LINE_STYLE, type: LINE_TYPE, width: int, price_line: bool, price_label: bool) -> Line
+```{py:method} create_line(name: str, color: COLOR, style: LINE_STYLE, type: LINE_TYPE, width: int, price_line: bool, price_label: bool, pane_index: int) -> Line
 
 Creates and returns a Line object, representing a `LineSeries` object in Lightweight Charts and can be used to create indicators. As well as the methods described below, the `Line` object also has access to:
 
@@ -68,13 +68,28 @@ ___
 
 
 
-```{py:method} create_histogram(name: str, color: COLOR, price_line: bool, price_label: bool, scale_margin_top: float, scale_margin_bottom: float) -> Histogram
+```{py:method} create_histogram(name: str, color: COLOR, price_line: bool, price_label: bool, scale_margin_top: float, scale_margin_bottom: float, pane_index: int) -> Histogram
 
 Creates and returns a Histogram object, representing a `HistogramSeries` object in Lightweight Charts and can be used to create indicators. As well as the methods described below, the object also has access to:
 
 [`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#SeriesCommon.hide_data), [`show_data`](#SeriesCommon.show_data) and [`price_line`](#SeriesCommon.price_line).
 
+`pane_index`
+: Places the histogram in the given pane (0 = main pane). The pane must already exist or be created first via `add_pane()`.
+
 Its instance should only be accessed from this method.
+```
+___
+
+
+
+```{py:method} create_area(name: str, top_color: COLOR, bottom_color: COLOR, line_color: COLOR, line_width: int, price_line: bool, price_label: bool, pane_index: int) -> Area
+
+Creates and returns an Area series object, representing an `AreaSeries` in Lightweight Charts.
+
+`set()` and `update()` accept optional per-point colour columns or keys: `line_color`, `top_color`, `bottom_color` (camelCase variants also accepted).
+
+Inherits all [`SeriesCommon`](series.md) methods.
 ```
 ___
 
@@ -328,40 +343,72 @@ ___
 
 ```{py:method} create_table(width: NUM, height: NUM, headings: Tuple[str], widths: Tuple[float], alignments: Tuple[str], position: FLOAT, draggable: bool, return_clicked_cells: bool, func: callable) -> Table
 
-Creates and returns a [`Table`](https://lightweight-charts-python.readthedocs.io/en/latest/tables.html) object.
+Creates and returns a [`Table`](tables.md) object.
 
 ```
 ___
 
 
 
-````{py:method} create_subchart(position: FLOAT, width: float, height: float, sync: bool | str, sync_crosshairs_only: bool, scale_candles_only: bool, toolbox: bool) -> AbstractChart
+```{py:method} screenshot() -> bytes
 
-Creates and returns a Chart object, placing it adjacent to the previous Chart. This allows for the use of multiple chart panels within the same window.
+Takes a screenshot of the chart and returns the image as a `bytes` object.
 
-`position`
-: specifies how the Subchart will float.
-
-`height` | `width`
-: Specifies the size of the Subchart, where `1` is the width/height of the window (100%)
-
-`sync`
-: If given as `True`, the Subchart's timescale and crosshair will follow that of the declaring Chart. If a `str` is passed, the Chart will follow the panel with the given id.  Chart ids  can be accessed from the `chart.id` attribute.
-
-`sync_crosshairs_only`
-: If given as `True`, only the crosshairs will be synced and movement will remain independant.
-
-```{important}
-`width` and `height` should be given as a number between 0 and 1.
+This method can only be called after the chart window is visible.
 ```
+___
 
-Charts are arranged horizontally from left to right. When the available space is no longer sufficient, the subsequent Chart will be positioned on a new row, starting from the left side.
 
-[Subchart examples](../examples/subchart.md)
 
-```{important}
-Price axis scales vary depending on the precision of the data used, and there is no way to perfectly 'align' two seperate price scales if they contain differing price data.
+```{py:method} add_pane(height: int) -> None
+
+Adds a new empty pane below the existing panes.
+
+`height`
+: Optional height in pixels for the new pane.
 ```
+___
 
-````
+
+
+```{py:method} remove_pane(pane_index: int)
+
+Removes the pane at the given index.
+```
+___
+
+
+
+```{py:method} resize_pane(pane_index: int, height: int)
+
+Sets the height of the pane at `pane_index` in pixels.
+```
+___
+
+
+
+```{py:method} swap_panes(first: int, second: int)
+
+Swaps the panes at the two given indices.
+```
+___
+
+
+
+```{py:method} get_pane_count() -> int
+
+Returns the current number of panes in the chart (blocking call).
+```
+___
+
+
+
+```{py:method} panes() -> List[Pane]
+
+Returns a list of [`Pane`](pane.md) objects, one per pane.
+
+The pane count is fetched from JS each time this is called. Pane objects become stale after structural changes (`remove_pane`, `swap_panes`) — re-call `panes()` after such operations.
+
+See the [Panes example](../examples/subchart.md) for usage.
+```
 `````
