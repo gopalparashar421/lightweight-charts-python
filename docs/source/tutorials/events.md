@@ -108,13 +108,13 @@ if __name__ == '__main__':
     asyncio.run(main())
 ```
 
-This is how the library is intended to be used with live data (option #2 [described here]()).
+This is how the library is intended to be used with live data (option #2 from [Stream Chart](stream_chart.md)).
 ___
 
 ## Live data, topbar & events
 
 
-Now we can create an asyncio program which updates chart data whilst allowing the GUI loop to continue processing events, based the [Live data](live_chart.md) example:
+Now we can create an asyncio program which updates chart data whilst allowing the GUI loop to continue processing events, based the [Stream Chart](stream_chart.md) example:
 
 ```python
 import asyncio
