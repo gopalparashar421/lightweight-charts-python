@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Verify bundle.js is present in wheel
+        run: |
+          python -c "
+          import zipfile, glob, sys
+          whl = glob.glob('dist/*.whl')[0]
+          names = zipfile.ZipFile(whl).namelist()
+          assert any('js/bundle.js' in n for n in names), 'bundle.js missing from wheel!'
+          print('bundle.js present:', [n for n in names if 'bundle.js' in n])
+          "
+
+      - name: Smoke-test import
+        run: |
+          pip install dist/*.whl
+          python -c "import lightweight_charts; print(lightweight_charts.__version__)"
