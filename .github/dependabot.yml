@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/.github/workflows"
+    schedule:
+      interval: weekly
+    assignees:
+      - gopalparashar421
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    assignees:
+      - gopalparashar421

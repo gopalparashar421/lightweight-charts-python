@@ -2,12 +2,13 @@ import asyncio
 import inspect
 import json
 import multiprocessing as mp
-import typing
+
 import webview
 from webview.errors import JavascriptException
 
 from lightweight_charts import abstract
-from .util import parse_event_message, FLOAT
+
+from .util import FLOAT, parse_event_message
 
 
 class CallbackAPI:
@@ -28,7 +29,7 @@ class PyWV:
         self.is_alive = True
 
         self.callback_api = CallbackAPI(emit_q)
-        self.windows: typing.List[webview.Window] = []
+        self.windows: list[webview.Window] = []
         self.loop()
 
     def create_window(
@@ -91,7 +92,6 @@ class PyWV:
                             window.evaluate_js(arg)
 
                         except webview.errors.JavascriptException as e:
-
                             # print(f"Js: {str(arg)}")
                             print(f"JavaScript Error 1: {e}")  # Debugging output
                 except KeyError as e:
@@ -165,10 +165,10 @@ class Chart(abstract.AbstractChart):
         self,
         width: int = 800,
         height: int = 600,
-        x: int = None,
-        y: int = None,
+        x: int | None = None,
+        y: int | None = None,
         title: str = "",
-        screen: int = None,
+        screen: int | None = None,
         on_top: bool = False,
         maximize: bool = False,
         debug: bool = False,
@@ -179,9 +179,7 @@ class Chart(abstract.AbstractChart):
         position: FLOAT = "left",
     ):
         Chart.WV.debug = debug
-        self._i = Chart.WV.create_window(
-            width, height, x, y, screen, on_top, maximize, title
-        )
+        self._i = Chart.WV.create_window(width, height, x, y, screen, on_top, maximize, title)
 
         window = abstract.Window(
             script_func=lambda s: Chart.WV.evaluate_js(self._i, s),
@@ -231,10 +229,7 @@ class Chart(abstract.AbstractChart):
         try:
             from lightweight_charts import polygon
 
-            [
-                asyncio.create_task(self.polygon.async_set(*args))
-                for args in polygon._set_on_load
-            ]
+            [asyncio.create_task(self.polygon.async_set(*args)) for args in polygon._set_on_load]
             while 1:
                 while Chart.WV.emit_queue.empty() and self.is_alive:
                     await asyncio.sleep(0.05)
@@ -249,11 +244,7 @@ class Chart(abstract.AbstractChart):
                     func, args = parse_event_message(self.win, response)
                     if func is None:
                         continue
-                    (
-                        await func(*args)
-                        if inspect.iscoroutinefunction(func)
-                        else func(*args)
-                    )
+                    (await func(*args) if inspect.iscoroutinefunction(func) else func(*args))
         except KeyboardInterrupt:
             return
 

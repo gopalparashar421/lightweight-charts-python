@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 from ..util import Pane
 
@@ -17,12 +16,12 @@ class SessionHighlighting(Pane):
         Use ``'rgba(0,0,0,0)'`` for transparent (no highlight).
     """
 
-    def __init__(self, series, default_color: str = 'rgba(0,0,0,0)'):
+    def __init__(self, series, default_color: str = "rgba(0,0,0,0)"):
         super().__init__(series._chart.win)
         self._series = series
-        sessions_var = self.id + 'S'
+        sessions_var = self.id + "S"
         self._sessions_var = sessions_var
-        self.run_script(f'''
+        self.run_script(f"""
             {sessions_var} = [];
             {self.id} = new Lib.SessionHighlighting(function(time) {{
                 var ts = typeof time === 'number' ? time * 1000 : new Date(time).getTime();
@@ -33,9 +32,9 @@ class SessionHighlighting(Pane):
                 return '{default_color}';
             }});
             {series.id}.series.attachPrimitive({self.id});
-        null''')
+        null""")
 
-    def set_sessions(self, sessions: List[dict]):
+    def set_sessions(self, sessions: list[dict]):
         """
         Sets the time ranges to highlight.
 
@@ -47,19 +46,21 @@ class SessionHighlighting(Pane):
                     {'start': 1704103200, 'end': 1704106800, 'color': 'rgba(255,0,0,0.1)'},
                 ]
         """
-        js_sessions = json.dumps([
-            {
-                'start': s['start'] * 1000,
-                'end':   s['end']   * 1000,
-                'color': s.get('color', 'rgba(41, 98, 255, 0.08)'),
-            }
-            for s in sessions
-        ])
-        self.run_script(f'''
+        js_sessions = json.dumps(
+            [
+                {
+                    "start": s["start"] * 1000,
+                    "end": s["end"] * 1000,
+                    "color": s.get("color", "rgba(41, 98, 255, 0.08)"),
+                }
+                for s in sessions
+            ]
+        )
+        self.run_script(f"""
             {self._sessions_var} = {js_sessions};
             {self.id}.dataUpdated('full');
-        null''')
+        null""")
 
     def delete(self):
         """Detaches and removes the session highlighting from the series."""
-        self.run_script(f'{self._series.id}.series.detachPrimitive({self.id})')
+        self.run_script(f"{self._series.id}.series.detachPrimitive({self.id})")

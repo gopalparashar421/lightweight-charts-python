@@ -19,13 +19,12 @@ import threading
 import time
 import webbrowser
 
-import fastapi
+import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import uvicorn
 
-from .abstract import AbstractChart, Window
+from .abstract import AbstractChart
 from .util import BulkRunScript, parse_event_message
 
 # ---------------------------------------------------------------------------
@@ -44,7 +43,7 @@ class StreamWindow:
 
     def __init__(self) -> None:
         self.token: str = secrets.token_hex(32)
-        self.scripts: list = []          # replay buffer — never cleared
+        self.scripts: list = []  # replay buffer — never cleared
         self.handlers: dict = {}
 
         self._ws: WebSocket | None = None
@@ -67,9 +66,7 @@ class StreamWindow:
             self.bulk_run.add_script(script)
             return
         if self._ws is not None and self._loop is not None:
-            asyncio.run_coroutine_threadsafe(
-                self._ws.send_text(script), self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._ws.send_text(script), self._loop)
         else:
             self.scripts.append(script)
 
@@ -83,8 +80,7 @@ class StreamWindow:
         self.run_script(f"{RETURN_PREFIX}{script}")
         if not self._return_event.wait(timeout=5.0):
             raise TimeoutError(
-                "Timed out waiting for return value from browser "
-                f"(script: {script!r})"
+                f"Timed out waiting for return value from browser (script: {script!r})"
             )
         return self._return_value
 
@@ -95,9 +91,7 @@ class StreamWindow:
         """
         self.scripts.append(script)
         if self._ws is not None and self._loop is not None:
-            asyncio.run_coroutine_threadsafe(
-                self._ws.send_text(script), self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._ws.send_text(script), self._loop)
 
     def bulk_run_scripts(self, scripts) -> None:
         """Send each script in *scripts*."""
@@ -123,9 +117,7 @@ class StreamWindow:
         @app.get("/")
         async def serve_stream_html():
             headers = {
-                "Content-Security-Policy": (
-                    "default-src 'self'; script-src 'self' 'unsafe-eval'"
-                )
+                "Content-Security-Policy": ("default-src 'self'; script-src 'self' 'unsafe-eval'")
             }
             return FileResponse(
                 os.path.join(_JS_DIR, "stream.html"),
@@ -140,6 +132,7 @@ class StreamWindow:
             with open(os.path.join(_JS_DIR, "stream-shim.js")) as f:
                 content = f.read().replace("'__STREAM_TOKEN__'", repr(_token))
             from fastapi.responses import Response
+
             return Response(content=content, media_type="application/javascript")
 
         @app.websocket("/ws")
@@ -157,10 +150,7 @@ class StreamWindow:
 
             # --- single-client guard ---
             if self._ws is not None:
-                print(
-                    "WARNING: A second client attempted to connect; "
-                    "rejected with code 4002."
-                )
+                print("WARNING: A second client attempted to connect; rejected with code 4002.")
                 await websocket.close(code=4002)
                 return
 
@@ -175,7 +165,7 @@ class StreamWindow:
                 while True:
                     msg = await websocket.receive_text()
                     if msg.startswith(RETURN_PREFIX):
-                        self._return_value = msg[len(RETURN_PREFIX):]
+                        self._return_value = msg[len(RETURN_PREFIX) :]
                         self._return_event.set()
                     else:
                         func, args = parse_event_message(self, msg)
@@ -206,7 +196,10 @@ class StreamWindow:
             try:
                 loop.run_until_complete(self._server.serve())
             except OSError as exc:
-                if "address already in use" in str(exc).lower() or exc.errno in (98, 10048):
+                if "address already in use" in str(exc).lower() or exc.errno in (
+                    98,
+                    10048,
+                ):
                     print(
                         f"ERROR: Port {port} is already in use. "
                         "Choose a different port with chart.show(port=<n>)."
@@ -234,8 +227,8 @@ class StreamChart(AbstractChart):
         self,
         width: int = 800,
         height: int = 600,
-        x: int = None,
-        y: int = None,
+        x: int | None = None,
+        y: int | None = None,
         on_top: bool = False,
         maximize: bool = False,
         toolbox: bool = False,

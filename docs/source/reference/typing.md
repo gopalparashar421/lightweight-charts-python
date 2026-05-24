@@ -38,11 +38,3 @@ Throughout the library, colors should be given as either rgb (`rgb(100, 100, 100
 
 ```{py:class} ALIGN(Literal['left', 'right'])
 ```
-
-
-
-
-
-
-
-

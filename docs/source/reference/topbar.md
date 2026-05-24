@@ -4,7 +4,7 @@
 ````{py:class} TopBar
 The `TopBar` class represents the top bar shown on the chart:
 
-![topbar](https://i.imgur.com/Qu2FW9Y.png)
+![topbar](../_static/images/topbar.png)
 
 This object is accessed from the `topbar` attribute of the chart object (`chart.topbar.<method>`).
 

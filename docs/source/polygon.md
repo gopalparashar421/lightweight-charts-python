@@ -15,7 +15,7 @@ The `stock`, `option`, `index`, `forex`, and `crypto` methods of `chart.polygon`
 * `start_date`: The start date given in the format `YYYY-MM-DD`.
 * `end_date`: The end date given in the same format. By default this is `'now'`, which uses the time now.
 * `limit`: The maximum number of base aggregates to be queried to create the aggregate results.
-* `live`: When set to `True`, a websocket connection will be used to update the chart or subchart in real-time. 
+* `live`: When set to `True`, a websocket connection will be used to update the chart or subchart in real-time.
 * These methods will also return a boolean representing whether the request was successful.
 
 The `websockets` library is required when using live data.
@@ -180,4 +180,3 @@ Unsubscribes the given function from live data.
 The ticker will only be unsubscribed if there are no additional functions that are currently subscribed.
 
 ```
-

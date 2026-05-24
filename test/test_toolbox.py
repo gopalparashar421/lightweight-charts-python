@@ -1,43 +1,43 @@
-import unittest
-import pandas as pd
+"""test_toolbox.py -- drawing tests skipped in CI (require display)."""
 
-from lightweight_charts import Chart
-from util import BARS, Tester
-
-from time import sleep
+import pytest
 
 
-class TestToolBox(Tester):
-    def test_create_horizontal_line(self):
-        self.chart.set(BARS)
-        horz_line = self.chart.horizontal_line(200, width=4)
-        self.chart.show()
-        result = self.chart.win.run_script_and_get(f"{horz_line.id}._options");
-        self.assertTrue(result)
-        self.chart.exit()
-
-    def test_create_trend_line(self):
-        self.chart.set(BARS)
-        horz_line = self.chart.trend_line(BARS.iloc[-10]['date'], 180, BARS.iloc[-3]['date'], 190)
-        self.chart.show()
-        result = self.chart.win.run_script_and_get(f"{horz_line.id}._options");
-        self.assertTrue(result)
-        self.chart.exit()
-
-    def test_create_box(self):
-        self.chart.set(BARS)
-        horz_line = self.chart.box(BARS.iloc[-10]['date'], 180, BARS.iloc[-3]['date'], 190)
-        self.chart.show()
-        result = self.chart.win.run_script_and_get(f"{horz_line.id}._options");
-        self.assertTrue(result)
-        self.chart.exit()
-
-    def test_create_vertical_line(self):
-        ...
-
-    def test_create_vertical_span(self):
-        ...
+@pytest.mark.skip(reason="requires display: chart.show() + run_script_and_get()")
+def test_create_horizontal_line(chart, bars):
+    chart.set(bars)
+    horz_line = chart.horizontal_line(200, width=4)
+    chart.show()
+    result = chart.win.run_script_and_get(f"{horz_line.id}._options")
+    assert result
+    chart.exit()
 
 
-if __name__ == '__main__':
-    unittest.main()
+@pytest.mark.skip(reason="requires display: chart.show() + run_script_and_get()")
+def test_create_trend_line(chart, bars):
+    chart.set(bars)
+    horz_line = chart.trend_line(bars.iloc[-10]["date"], 180, bars.iloc[-3]["date"], 190)
+    chart.show()
+    result = chart.win.run_script_and_get(f"{horz_line.id}._options")
+    assert result
+    chart.exit()
+
+
+@pytest.mark.skip(reason="requires display: chart.show() + run_script_and_get()")
+def test_create_box(chart, bars):
+    chart.set(bars)
+    box = chart.box(bars.iloc[-10]["date"], 180, bars.iloc[-3]["date"], 190)
+    chart.show()
+    result = chart.win.run_script_and_get(f"{box.id}._options")
+    assert result
+    chart.exit()
+
+
+@pytest.mark.skip(reason="not yet implemented")
+def test_create_vertical_line():
+    pass
+
+
+@pytest.mark.skip(reason="not yet implemented")
+def test_create_vertical_span():
+    pass

@@ -1,6 +1,6 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from ..util import Pane, NUM, TIME
+from ..util import NUM, TIME, Pane
 
 if TYPE_CHECKING:
     from ..abstract import SeriesCommon
@@ -8,12 +8,12 @@ if TYPE_CHECKING:
 
 def _js_num(v) -> str:
     """Return ``'null'`` for ``None``, otherwise the numeric literal string."""
-    return 'null' if v is None else str(v)
+    return "null" if v is None else str(v)
 
 
-def _js_str(v: Optional[str]) -> str:
+def _js_str(v: str | None) -> str:
     """Return ``'null'`` for ``None``, otherwise a JS single-quoted string."""
-    return 'null' if v is None else f"'{v}'"
+    return "null" if v is None else f"'{v}'"
 
 
 class PositionTool(Pane):
@@ -53,9 +53,9 @@ class PositionTool(Pane):
         stop: NUM,
         target: NUM,
         entry_time: TIME,
-        end_time: Optional[TIME] = None,
-        stop_color: str = 'rgba(239, 83, 80, 0.25)',
-        target_color: str = 'rgba(38, 166, 154, 0.25)',
+        end_time: TIME | None = None,
+        stop_color: str = "rgba(239, 83, 80, 0.25)",
+        target_color: str = "rgba(38, 166, 154, 0.25)",
     ):
         super().__init__(series._chart.win)
         self._series = series
@@ -64,9 +64,9 @@ class PositionTool(Pane):
 
         chart = series._chart
         entry_ts = chart._single_datetime_format(entry_time)
-        end_ts   = chart._single_datetime_format(end_time) if end_time is not None else 'null'
+        end_ts = chart._single_datetime_format(end_time) if end_time is not None else "null"
 
-        self.run_script(f'''
+        self.run_script(f"""
             {self.id} = new Lib.PositionTool({{
                 entry:           {entry},
                 stop:            {stop},
@@ -77,16 +77,16 @@ class PositionTool(Pane):
                 targetColor:     '{target_color}',
             }});
             {series.id}.series.attachPrimitive({self.id});
-        null''')
+        null""")
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def update(
         self,
-        entry: Optional[NUM] = None,
-        stop: Optional[NUM] = None,
-        target: Optional[NUM] = None,
-        end_time: Optional[TIME] = None,
+        entry: NUM | None = None,
+        stop: NUM | None = None,
+        target: NUM | None = None,
+        end_time: TIME | None = None,
     ) -> None:
         """
         Update one or more position parameters.
@@ -104,21 +104,21 @@ class PositionTool(Pane):
         # Build a JS object literal from only the supplied arguments
         parts: list[str] = []
         if entry is not None:
-            parts.append(f'entry: {entry}')
+            parts.append(f"entry: {entry}")
         if stop is not None:
-            parts.append(f'stop: {stop}')
+            parts.append(f"stop: {stop}")
         if target is not None:
-            parts.append(f'target: {target}')
+            parts.append(f"target: {target}")
         if end_time is not None:
             ts = self._series._chart._single_datetime_format(end_time)
-            parts.append(f'endTime: {ts}')
+            parts.append(f"endTime: {ts}")
 
         if parts:
-            self.run_script(f'{self.id}.applyOptions({{{", ".join(parts)}}})')
+            self.run_script(f"{self.id}.applyOptions({{{', '.join(parts)}}})")
 
     def delete(self) -> None:
         """Detach and permanently remove the position overlay from the chart."""
-        self.run_script(f'{self._series.id}.series.detachPrimitive({self.id})')
+        self.run_script(f"{self._series.id}.series.detachPrimitive({self.id})")
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -129,10 +129,10 @@ class PositionTool(Pane):
         if target == entry:
             raise ValueError("PositionTool: target price must differ from entry price.")
 
-        is_long  = target > entry
+        is_long = target > entry
         is_short = target < entry
 
-        if is_long  and not (entry > stop):
+        if is_long and not (entry > stop):
             raise ValueError(
                 "PositionTool: long position requires target > entry > stop "
                 f"(got entry={entry}, stop={stop}, target={target})."

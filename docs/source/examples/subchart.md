@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     chart2 = chart.create_subchart(width=1, height=0.2, sync=True)
     line = chart2.create_line()
-    
+
     df = pd.read_csv('ohlcv.csv')
     df2 = pd.read_csv('rsi.csv')
 

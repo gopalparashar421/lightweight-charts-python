@@ -1,33 +1,39 @@
 <div align="center">
 
-# lightweight-charts-python
+# python-lightweight-charts
 
-[![PyPi Release](https://img.shields.io/pypi/v/lightweight-charts?color=32a852&label=PyPi)](https://pypi.org/project/lightweight-charts/)
-[![Made with Python](https://img.shields.io/badge/Python-3.8+-c7a002?logo=python&logoColor=white)](https://python.org "Go to Python homepage")
-[![License](https://img.shields.io/github/license/louisnw01/lightweight-charts-python?color=9c2400)](https://github.com/louisnw01/lightweight-charts-python/blob/main/LICENSE)
-[![Documentation](https://img.shields.io/badge/documentation-006ee3)](https://lightweight-charts-python.readthedocs.io/en/latest/index.html)
+[![PyPi Release](https://img.shields.io/pypi/v/python-lightweight-charts?color=32a852&label=PyPi)](https://pypi.org/project/python-lightweight-charts/)
+[![Made with Python](https://img.shields.io/badge/Python-3.10+-c7a002?logo=python&logoColor=white)](https://python.org "Go to Python homepage")
+[![License](https://img.shields.io/github/license/gopalparashar421/lightweight-charts-python?color=9c2400)](https://github.com/gopalparashar421/lightweight-charts-python/blob/main/LICENSE)
+[![Documentation](https://img.shields.io/badge/documentation-006ee3)](https://python-lightweight-charts.readthedocs.io/en/latest/)
 
-![cover](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/cover.png)
+![cover](https://raw.githubusercontent.com/gopalparashar421/lightweight-charts-python/main/cover.png)
 
-lightweight-charts-python aims to provide a simple and pythonic way to access and implement [TradingView's Lightweight Charts](https://www.tradingview.com/lightweight-charts/).
+A maintained Python wrapper for [TradingView's Lightweight Charts](https://www.tradingview.com/lightweight-charts/) v5.x.
+
+> **Fork of** [`louisnw01/lightweight-charts-python`](https://github.com/louisnw01/lightweight-charts-python) — original library by [@louisnw01](https://github.com/louisnw01). This fork brings it up to Lightweight Charts v5, adds `StreamChart`, completes the `IChartApi` surface, and adds new plugins. Full credit and thanks to the original author.
+
 </div>
 
 
 ## Installation
 ```
-pip install lightweight-charts
+pip install python-lightweight-charts
 ```
 ___
 
 ## Features
 1. Streamlined for live data, with methods for updating directly from tick data.
-2. Multi-pane charts using [Subcharts](https://lightweight-charts-python.readthedocs.io/en/latest/reference/abstract_chart.html#AbstractChart.create_subchart).
-3. The [Toolbox](https://lightweight-charts-python.readthedocs.io/en/latest/reference/toolbox.html), allowing for trendlines, rectangles, rays and horizontal lines to be drawn directly onto charts.
-4. [Events](https://lightweight-charts-python.readthedocs.io/en/latest/tutorials/events.html) allowing for timeframe selectors (1min, 5min, 30min etc.), searching, hotkeys, and more.
-5. [Tables](https://lightweight-charts-python.readthedocs.io/en/latest/reference/tables.html) for watchlists, order entry, and trade management.
-6. Direct integration of market data through [Polygon.io's](https://polygon.io/?utm_source=affiliate&utm_campaign=pythonlwcharts) market data API.
+2. Multi-pane charts using [Subcharts](https://python-lightweight-charts.readthedocs.io/en/latest/reference/abstract_chart.html#AbstractChart.create_subchart) and a full pane-management API (`add_pane`, `move_pane`, `resize_pane`, `remove_pane`).
+3. The [Toolbox](https://python-lightweight-charts.readthedocs.io/en/latest/reference/toolbox.html) — draw trendlines, rectangles, rays, and horizontal lines directly on charts.
+4. [Events & Callbacks](https://python-lightweight-charts.readthedocs.io/en/latest/tutorials/events.html) — timeframe selectors, search, hotkeys, and more.
+5. [Tables](https://python-lightweight-charts.readthedocs.io/en/latest/reference/tables.html) for watchlists, order entry, and trade management.
+6. [StreamChart](https://python-lightweight-charts.readthedocs.io/en/latest/reference/stream_chart.html) — serve a chart over HTTP/WebSocket, viewable in any browser (no desktop window needed).
+7. **Plugins:** `Tooltip`, `BandsIndicator`, `SessionHighlighting`, `HeatmapSeries`, `VolumeProfile`, `PositionTool`.
+8. Full [Lightweight Charts v5 IChartApi](https://tradingview.github.io/lightweight-charts/docs/api) surface including `price_scale`, `time_scale`, watermark, grid, crosshair, and more.
+9. Direct integration of market data through [Polygon.io's](https://polygon.io/?utm_source=affiliate&utm_campaign=pythonlwcharts) market data API.
 
-__Supports:__ Jupyter Notebooks, PyQt6, PyQt5, PySide6, wxPython, Streamlit, and asyncio.
+**Supports:** Jupyter Notebooks, PyQt6, PyQt5, PySide6, wxPython, Streamlit, and asyncio.
 
 PartTimeLarry: [Interactive Brokers API and TradingView Charts in Python](https://www.youtube.com/watch?v=TlhDI3PforA)
 ___
@@ -40,17 +46,17 @@ from lightweight_charts import Chart
 
 
 if __name__ == '__main__':
-    
+
     chart = Chart()
-    
-    # Columns: time | open | high | low | close | volume 
+
+    # Columns: time | open | high | low | close | volume
     df = pd.read_csv('ohlcv.csv')
     chart.set(df)
-    
+
     chart.show(block=True)
 
 ```
-![setting_data image](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/examples/1_setting_data/setting_data.png)
+![setting_data image](https://raw.githubusercontent.com/gopalparashar421/lightweight-charts-python/main/examples/1_setting_data/setting_data.png)
 ___
 
 ### 2. Updating bars in real-time:
@@ -72,19 +78,19 @@ if __name__ == '__main__':
     chart.show()
 
     last_close = df1.iloc[-1]['close']
-    
+
     for i, series in df2.iterrows():
         chart.update(series)
 
         if series['close'] > 20 and last_close < 20:
             chart.marker(text='The price crossed $20!')
-            
+
         last_close = series['close']
         sleep(0.1)
 
 ```
 
-![live data gif](https://github.com/louisnw01/lightweight-charts-python/blob/main/examples/2_live_data/live_data.gif?raw=true)
+![live data gif](https://github.com/gopalparashar421/lightweight-charts-python/blob/main/examples/2_live_data/live_data.gif?raw=true)
 ___
 
 ### 3. Updating bars from tick data in real-time:
@@ -96,25 +102,25 @@ from lightweight_charts import Chart
 
 
 if __name__ == '__main__':
-    
+
     df1 = pd.read_csv('ohlc.csv')
-    
-    # Columns: time | price 
+
+    # Columns: time | price
     df2 = pd.read_csv('ticks.csv')
-    
+
     chart = Chart()
-    
+
     chart.set(df1)
-    
+
     chart.show()
-    
+
     for i, tick in df2.iterrows():
         chart.update_from_tick(tick)
-            
+
         sleep(0.03)
 
 ```
-![tick data gif](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/examples/3_tick_data/tick_data.gif)
+![tick data gif](https://raw.githubusercontent.com/gopalparashar421/lightweight-charts-python/main/examples/3_tick_data/tick_data.gif)
 ___
 
 ### 4. Line Indicators:
@@ -145,7 +151,7 @@ if __name__ == '__main__':
     chart.show(block=True)
 
 ```
-![line indicators image](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/examples/4_line_indicators/line_indicators.png)
+![line indicators image](https://raw.githubusercontent.com/gopalparashar421/lightweight-charts-python/main/examples/4_line_indicators/line_indicators.png)
 ___
 
 ### 5. Styling:
@@ -156,7 +162,7 @@ from lightweight_charts import Chart
 
 
 if __name__ == '__main__':
-    
+
     chart = Chart()
 
     df = pd.read_csv('ohlcv.csv')
@@ -182,7 +188,7 @@ if __name__ == '__main__':
     chart.show(block=True)
 
 ```
-![styling image](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/examples/5_styling/styling.png)
+![styling image](https://raw.githubusercontent.com/gopalparashar421/lightweight-charts-python/main/examples/5_styling/styling.png)
 ___
 
 ### 6. Callbacks:
@@ -236,29 +242,24 @@ if __name__ == '__main__':
     chart.show(block=True)
 
 ```
-![callbacks gif](https://raw.githubusercontent.com/louisnw01/lightweight-charts-python/main/examples/6_callbacks/callbacks.gif)
+![callbacks gif](https://raw.githubusercontent.com/gopalparashar421/lightweight-charts-python/main/examples/6_callbacks/callbacks.gif)
 ___
 
-## Streaming Mode
+### 7. StreamChart — browser-based chart over HTTP/WebSocket:
 
-`StreamChart` serves a chart over HTTP/WebSocket so you can view it in any browser — no desktop window required.
-
-### Installation
-
-```
-pip install lightweight-charts[stream]
-```
-
-### Usage
+`StreamChart` spins up a local FastAPI/Uvicorn server and streams data to any browser tab. No desktop window is required — ideal for headless servers, notebooks, or remote development.
 
 ```python
 import pandas as pd
 from lightweight_charts import StreamChart
 
-chart = StreamChart()
-df = pd.read_csv('ohlcv.csv')   # columns: time | open | high | low | close | volume
-chart.set(df)
-chart.show(port=8080, block=True)
+if __name__ == '__main__':
+    chart = StreamChart()
+
+    df = pd.read_csv('ohlcv.csv')   # columns: time | open | high | low | close | volume
+    chart.set(df)
+
+    chart.show(port=8080, block=True)
 ```
 
 Running the script prints a URL such as:
@@ -267,17 +268,51 @@ Running the script prints a URL such as:
 Chart server running at http://127.0.0.1:8080/?token=<64-hex-chars> — press Ctrl+C to stop
 ```
 
-Open that URL in your browser to view the chart.  The URL contains a one-time security token — keep it private and do not share it.
+Open that URL in your browser to view the chart. The URL contains a one-time security token — keep it private.
 
 > **Tip:** pass `open_browser=True` to `chart.show()` to launch the browser automatically.
-> **Network access:** bind to `host='0.0.0.0'` for LAN access; a warning will be printed reminding you to keep the token URL private.
+
+___
+
+### 8. Plugins:
+
+```python
+import pandas as pd
+from lightweight_charts import Chart
+from lightweight_charts.plugins import BandsIndicator, Tooltip
+
+if __name__ == '__main__':
+    chart = Chart()
+
+    df = pd.read_csv('ohlcv.csv')
+    chart.set(df)
+
+    # Bollinger Bands
+    upper = df['close'].rolling(20).mean() + 2 * df['close'].rolling(20).std()
+    lower = df['close'].rolling(20).mean() - 2 * df['close'].rolling(20).std()
+    bands = BandsIndicator(chart)
+    bands.set(df['time'], upper, lower)
+
+    # Hover tooltip
+    tooltip = Tooltip(chart)
+
+    chart.show(block=True)
+```
+
+Available plugins: `Tooltip`, `BandsIndicator`, `SessionHighlighting`, `HeatmapSeries`, `VolumeProfile`, `PositionTool`.
+
+See the [examples/](https://github.com/gopalparashar421/lightweight-charts-python/tree/main/examples) directory for a runnable script for each plugin.
+
 ___
 
 <div align="center">
 
-[![Documentation](https://img.shields.io/badge/documentation-006ee3)](https://lightweight-charts-python.readthedocs.io/en/latest/index.html)
+[![Documentation](https://img.shields.io/badge/documentation-006ee3)](https://python-lightweight-charts.readthedocs.io/en/latest/)
 
-Inquiries: [shaders_worker_0e@icloud.com](mailto:shaders_worker_0e@icloud.com)
+Maintained by [Gopal Parashar](https://github.com/gopalparashar421) · [gopal.parashar421@gmail.com](mailto:gopal.parashar421@gmail.com)
+
+This is a maintained fork of [`louisnw01/lightweight-charts-python`](https://github.com/louisnw01/lightweight-charts-python) by [@louisnw01](https://github.com/louisnw01). Full credit to the original author.
+
 ___
 
 _This package is an independent creation and has not been endorsed, sponsored, or approved by TradingView. The author of this package does not have any official relationship with TradingView, and the package does not represent the views or opinions of TradingView._

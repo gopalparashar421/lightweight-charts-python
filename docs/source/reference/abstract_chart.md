@@ -60,7 +60,7 @@ ___
 
 Creates and returns a Line object, representing a `LineSeries` object in Lightweight Charts and can be used to create indicators. As well as the methods described below, the `Line` object also has access to:
 
-[`marker`](#marker), [`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#hide_data), [`show_data`](#show_data) and [`price_line`](#price_line).
+[`marker`](#SeriesCommon.marker), [`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#SeriesCommon.hide_data), [`show_data`](#SeriesCommon.show_data) and [`price_line`](#SeriesCommon.price_line).
 
 Its instance should only be accessed from this method.
 ```
@@ -72,7 +72,7 @@ ___
 
 Creates and returns a Histogram object, representing a `HistogramSeries` object in Lightweight Charts and can be used to create indicators. As well as the methods described below, the object also has access to:
 
-[`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#hide_data), [`show_data`](#show_data) and [`price_line`](#price_line).
+[`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#SeriesCommon.hide_data), [`show_data`](#SeriesCommon.show_data) and [`price_line`](#SeriesCommon.price_line).
 
 Its instance should only be accessed from this method.
 ```
@@ -335,7 +335,7 @@ ___
 
 
 
-````{py:method} create_subchart(position: FLOAT, width: float, height: float, sync: bool | str, sync_crosshairs_only: bool, scale_candles_only: bool, toolbox: bool) -> AbstractChart 
+````{py:method} create_subchart(position: FLOAT, width: float, height: float, sync: bool | str, sync_crosshairs_only: bool, scale_candles_only: bool, toolbox: bool) -> AbstractChart
 
 Creates and returns a Chart object, placing it adjacent to the previous Chart. This allows for the use of multiple chart panels within the same window.
 
@@ -346,7 +346,7 @@ Creates and returns a Chart object, placing it adjacent to the previous Chart. T
 : Specifies the size of the Subchart, where `1` is the width/height of the window (100%)
 
 `sync`
-: If given as `True`, the Subchart's timescale and crosshair will follow that of the declaring Chart. If a `str` is passed, the Chart will follow the panel with the given id.  Chart ids  can be accessed from the `chart.id` attribute. 
+: If given as `True`, the Subchart's timescale and crosshair will follow that of the declaring Chart. If a `str` is passed, the Chart will follow the panel with the given id.  Chart ids  can be accessed from the `chart.id` attribute.
 
 `sync_crosshairs_only`
 : If given as `True`, only the crosshairs will be synced and movement will remain independant.
@@ -365,11 +365,3 @@ Price axis scales vary depending on the precision of the data used, and there is
 
 ````
 `````
-
-
-
-
-
-
-
-

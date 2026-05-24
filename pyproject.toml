@@ -3,18 +3,57 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lightweight-charts"
-version = "3.0"
-description = "Python framework for TradingView's Lightweight Charts JavaScript library (v5.x)."
+name = "python-lightweight-charts"
+version = "1.0.0"
+description = "A maintained Python wrapper for TradingView's Lightweight Charts v5.x — featuring StreamChart, plugins, multi-pane layouts, and full IChartApi coverage."
 authors = [
-    { name = "Gopal", email = "gopal.parashar421@gmail.com" }
+    { name = "Gopal Parashar", email = "gopal.parashar421@gmail.com" }
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
+keywords = [
+    "lightweight-charts", "tradingview", "charts", "finance", "trading",
+    "candlestick", "ohlc", "stock", "crypto", "visualization"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
 dependencies = [
     "pandas",
-    "pywebview>=5.0.5"
+    "pywebview>=5.0.5",
+    "fastapi>=0.100,<1.0",
+    "uvicorn[standard]>=0.23",
+]
+
+[project.urls]
+Homepage = "https://github.com/gopalparashar421/lightweight-charts-python"
+Source = "https://github.com/gopalparashar421/lightweight-charts-python"
+Documentation = "https://python-lightweight-charts.readthedocs.io/en/latest/"
+Changelog = "https://github.com/gopalparashar421/lightweight-charts-python/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/gopalparashar421/lightweight-charts-python/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "ruff",
+]
+docs = [
+    "sphinx>=8.1.3",
+    "myst-parser>=4.0",
+    "furo>=2024.8.6",
+    "sphinx-copybutton>=0.5",
+    "sphinx-tippy>=0.4",
 ]
 
 [tool.setuptools.packages.find]
@@ -22,3 +61,91 @@ include = ["lightweight_charts*"]
 
 [tool.setuptools.package-data]
 "lightweight_charts" = ["js/*"]
+[tool.ruff]
+# Target Python version your project runs on
+target-version = "py311"
+
+# Max line length (FastAPI & pandas code reads better a bit wider)
+line-length = 100
+
+# Exclude common non-source directories
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "migrations",
+    "node_modules",
+    "build",
+    "dist",
+]
+
+# Allow autofix for safe rules
+fix = true
+
+# Show what Ruff fixes
+show-fixes = true
+
+# Enable rule groups
+# You can comment/uncomment these selectively
+[tool.ruff.lint]
+select = [
+    # FAST API Rules
+    "FAST001",
+    "FAST003",
+    "E",   # pycodestyle errors (syntax, indentation)
+    "F",   # pyflakes (unused imports, undefined names)
+    "W",   # pycodestyle warnings
+    "I",   # isort (import sorting)
+    "B",   # flake8-bugbear (likely bugs & footguns)
+    "C4",  # flake8-comprehensions (cleaner comprehensions)
+    "UP",  # pyupgrade (modern Python syntax)
+    "ASYNC", # async-specific issues (important for asyncio / websockets)
+    "SIM", # code simplifications
+    "RUF", # Ruff-specific improvements
+]
+
+# Ignore rules that are noisy or annoying in real-world FastAPI projects
+ignore = [
+    "RUF001",
+    "RUF002", # Docstring contains ambiguous
+    "RUF003", # Comment contains ambiguous
+    "UP017",  # Checks for uses of datetime.timezone.utc
+    "E501",   # Line length (handled by formatter, not lint)
+    "B008",   # Do not perform function calls in argument defaults
+              # FastAPI Depends(...) triggers this falsely
+    "B006",   # Mutable default arguments (FastAPI models often do this safely)
+    "RUF012", # Mutable class attributes without typing.ClassVar
+    "W191",   # Indentation contains tabs
+    "SIM108", # Use ternary operator
+    "F541",   # f-string without any placeholders
+    "I001",   # Import block is un-sorted or un-formatted
+    "E401",   # Multiple imports in one line
+    "SIM114", # Combine 'if' branches using logical 'or' operator
+    "SIM105", # use contextlib.suppress instead of try - except - pass
+    "RUF010",
+    "W293",
+    "W291",
+    "W292",
+    "UP042",
+    "E741",   # Ambiguous variable name
+    "RUF006",  # asyncio.create_task fire-and-forget is intentional throughout
+    "ASYNC110", # polling loop with sleep is intentional in chart.py
+    "ASYNC230", # blocking file read in startup path is intentional
+    "B904",    # raise-without-from-clause: error rewrapping is intentional
+]
+
+# Allow unused variables starting with _
+dummy-variable-rgx = "^_.*"
+
+# Per-file ignores for special cases
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["test"]

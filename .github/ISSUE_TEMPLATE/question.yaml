@@ -22,4 +22,3 @@ body:
       render: python
     validations:
       required: false
-

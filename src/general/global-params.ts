@@ -59,4 +59,3 @@ export const setCursor = (type: string | undefined) => {
 //     name?: string,
 //     precision: number,
 // }
-

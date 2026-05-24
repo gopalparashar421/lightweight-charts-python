@@ -5,7 +5,7 @@
 
 The `Line` object represents a `LineSeries` object in Lightweight Charts and can be used to create indicators. As well as the methods described below, the `Line` object also has access to:
 
-[`marker`](#marker), [`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#hide_data), [`show_data`](#show_data) and [`price_line`](#price_line).
+[`marker`](#SeriesCommon.marker), [`horizontal_line`](#AbstractChart.horizontal_line), [`hide_data`](#SeriesCommon.hide_data), [`show_data`](#SeriesCommon.show_data) and [`price_line`](#SeriesCommon.price_line).
 
 Its instance should only be accessed from [`create_line`](#AbstractChart.create_line).
 ___

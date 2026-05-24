@@ -13,14 +13,14 @@ from lightweight_charts import Chart
 
 def on_search(chart, string):
     print(f'Search Text: "{string}" | Chart/SubChart ID: "{chart.id}"')
-    
-    
+
+
 if __name__ == '__main__':
     chart = Chart()
-    
+
     # Subscribe the function above to search event
-    chart.events.search += on_search  
-    
+    chart.events.search += on_search
+
     chart.show(block=True)
 
 ```
@@ -49,8 +49,8 @@ def on_button_press(chart):
     new_button_value = 'On' if chart.topbar['my_button'].value == 'Off' else 'Off'
     chart.topbar['my_button'].set(new_button_value)
     print(f'Turned something {new_button_value.lower()}.')
-    
-    
+
+
 if __name__ == '__main__':
     chart = Chart()
     chart.topbar.button('my_button', 'Off', func=on_button_press)
@@ -69,8 +69,8 @@ from lightweight_charts import Chart
 
 def on_timeframe_selection(chart):
     print(f'Getting data with a {chart.topbar["my_switcher"].value} timeframe.')
-    
-    
+
+
 if __name__ == '__main__':
     chart = Chart()
     chart.topbar.switcher(
@@ -108,13 +108,13 @@ if __name__ == '__main__':
     asyncio.run(main())
 ```
 
-This is how the library is intended to be used with live data (option #2 [described here]()). 
+This is how the library is intended to be used with live data (option #2 from [Stream Chart](stream_chart.md)).
 ___
 
 ## Live data, topbar & events
 
 
-Now we can create an asyncio program which updates chart data whilst allowing the GUI loop to continue processing events, based the [Live data](live_chart.md) example:
+Now we can create an asyncio program which updates chart data whilst allowing the GUI loop to continue processing events, based the [Stream Chart](stream_chart.md) example:
 
 ```python
 import asyncio
@@ -124,18 +124,18 @@ from lightweight_charts import Chart
 
 async def data_loop(chart):
     ticks = pd.read_csv('ticks.csv')
-    
+
     for i, tick in ticks.iterrows():
         if not chart.is_alive:
             return
         chart.update_from_tick(ticks.iloc[i])
         await asyncio.sleep(0.03)
-        
-        
+
+
 def on_new_bar(chart):
     print('New bar event!')
-    
-    
+
+
 def on_timeframe_selection(chart):
     print(f'Selected timeframe of {chart.topbar["timeframe"].value}')
 
@@ -143,17 +143,16 @@ def on_timeframe_selection(chart):
 async def main():
     chart = Chart()
     chart.events.new_bar += on_new_bar
-    
+
     chart.topbar.switcher('timeframe', ('1min', '5min'), func=on_timeframe_selection)
-    
+
     df = pd.read_csv('ohlc.csv')
-    
+
     chart.set(df)
     await asyncio.gather(chart.show_async(), data_loop(chart))
-    
+
 
 if __name__ == '__main__':
     asyncio.run(main())
 
 ```
-

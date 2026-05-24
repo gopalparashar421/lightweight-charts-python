@@ -19,50 +19,54 @@ from time import sleep
 from lightweight_charts import Chart
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ENTRY_IDX    = 1700         # bar index used as the live entry bar
-ENTRY_PRICE  = 2360.00
-STOP_PRICE   = 2390.00      # short position: stop above entry
-TARGET_PRICE = 2335.00      # short target below entry  (~1:2 R:R)
-STREAM_DELAY = 0            # seconds between streamed candles
+ENTRY_IDX = 1700  # bar index used as the live entry bar
+ENTRY_PRICE = 2360.00
+STOP_PRICE = 2390.00  # short position: stop above entry
+TARGET_PRICE = 2335.00  # short target below entry  (~1:2 R:R)
+STREAM_DELAY = 0  # seconds between streamed candles
 
-if __name__ == '__main__':
-    df = pd.read_csv('data.csv')
+if __name__ == "__main__":
+    df = pd.read_csv("data.csv")
 
     # Split: everything up-to-and-including the entry bar is "historical"
-    history   = df.iloc[:ENTRY_IDX + 1].copy()
-    live_feed = df.iloc[ENTRY_IDX + 1:].copy()
+    history = df.iloc[: ENTRY_IDX + 1].copy()
+    live_feed = df.iloc[ENTRY_IDX + 1 :].copy()
 
     # ── Build chart ───────────────────────────────────────────────────────────
-    chart = Chart(title='PositionTool demo - TSLA daily')
+    chart = Chart(title="PositionTool demo - TSLA daily")
     chart.candle_style(
-        up_color='#26a69a', down_color='#ef5350',
-        wick_up_color='#26a69a', wick_down_color='#ef5350',
+        up_color="#26a69a",
+        down_color="#ef5350",
+        wick_up_color="#26a69a",
+        wick_down_color="#ef5350",
     )
     chart.set(history)
     chart.fit()
 
     # ── Historical positions via position_list() ──────────────────────────────
-    hist_ids = chart.position_list([
-        {
-            'entry':      2100.00,
-            'stop':       2050.00,
-            'target':     2200.00,
-            'entry_time': df.iloc[1600]['time'],
-            'end_time':   df.iloc[1650]['time'],    # pinned right edge
-        },
-        {
-            'entry':        2250.00,
-            'stop':         2300.00,
-            'target':       2150.00,
-            'entry_time':   df.iloc[1650]['time'],
-            'end_time':     df.iloc[1690]['time'],
-            'stop_color':   'rgba(239, 83, 80, 0.15)',
-            'target_color': 'rgba(38, 166, 154, 0.15)',
-        },
-    ])
+    hist_ids = chart.position_list(
+        [
+            {
+                "entry": 2100.00,
+                "stop": 2050.00,
+                "target": 2200.00,
+                "entry_time": df.iloc[1600]["time"],
+                "end_time": df.iloc[1650]["time"],  # pinned right edge
+            },
+            {
+                "entry": 2250.00,
+                "stop": 2300.00,
+                "target": 2150.00,
+                "entry_time": df.iloc[1650]["time"],
+                "end_time": df.iloc[1690]["time"],
+                "stop_color": "rgba(239, 83, 80, 0.15)",
+                "target_color": "rgba(38, 166, 154, 0.15)",
+            },
+        ]
+    )
 
     # ── Live position via position() ──────────────────────────────────────────
-    entry_time = history.iloc[-1]['time']
+    entry_time = history.iloc[-1]["time"]
     live_id = chart.position(
         entry=ENTRY_PRICE,
         stop=STOP_PRICE,
@@ -75,7 +79,7 @@ if __name__ == '__main__':
 
     # ── Stream live bars ──────────────────────────────────────────────────────
     for _, bar in live_feed.iterrows():
-        close = bar['close']
+        close = bar["close"]
         chart.update(bar)
 
         # Remove the live overlay when target is reached

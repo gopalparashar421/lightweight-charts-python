@@ -26,7 +26,7 @@ def on_search(chart, searched_string):
         return
     chart.topbar['symbol'].set(searched_string)
     chart.set(new_data)
-    
+
     # Load the drawings saved under the symbol.
     chart.toolbox.load_drawings(searched_string)
 
@@ -58,16 +58,16 @@ if __name__ == '__main__':
 
     # Imports the drawings saved in the JSON file.
     chart.toolbox.import_drawings('drawings.json')
-    
+
     # Loads the drawings under the default symbol.
-    chart.toolbox.load_drawings(chart.topbar['symbol'].value)  
-    
+    chart.toolbox.load_drawings(chart.topbar['symbol'].value)
+
     # Saves drawings based on the symbol.
-    chart.toolbox.save_drawings_under(chart.topbar['symbol'])  
+    chart.toolbox.save_drawings_under(chart.topbar['symbol'])
 
     chart.show(block=True)
-    
+
     # Exports the drawings to the JSON file upon close.
-    chart.toolbox.export_drawings('drawings.json')  
+    chart.toolbox.export_drawings('drawings.json')
 
 ```

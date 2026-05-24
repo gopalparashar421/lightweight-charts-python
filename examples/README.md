@@ -6,10 +6,10 @@ fork of [`lightweight-charts-python`](https://github.com/louisnw01/lightweight-c
 
 ## Installation
 
-Install the fork directly from GitHub:
+Install from PyPI:
 
 ```bash
-pip install git+https://github.com/gopalparashar421/lightweight-charts-python.git
+pip install python-lightweight-charts
 ```
 
 Or clone and install in editable mode:
@@ -23,51 +23,57 @@ pip install -e .
 ## Running the examples
 
 Each script is self-contained — all data is generated with pandas/numpy (no
-external data fetching required).
+external data fetching required). Examples `1_setting_data/` through `8_table/`
+are the original tutorial series; `9_area_series/` through `18_full_example/`
+demonstrate new features added in this fork.
+
+> **Note:** `AttachedPrimitive` (custom JS primitives attached to a series) is
+> documented in the [API reference](../docs/source/reference/series.md) but does
+> not have a standalone runnable example.
 
 ```bash
 # Area series
-python examples/area_series.py
-
-# Up/Down markers on candlestick data
-python examples/up_down_markers.py
+python examples/9_area_series/area_series.py
 
 # Line series with last-price animation
-python examples/last_price_animation.py
-
-# Attaching a custom JS primitive to a series
-python examples/attach_primitive.py
-
-# Multi-pane chart (add_pane / get_pane_count / move_pane / remove_pane)
-python examples/panes_api.py
+python examples/10_last_price_animation/last_price_animation.py
 
 # Session highlighting plugin
-python examples/session_highlighting.py
+python examples/11_session_highlighting/session_highlighting.py
 
 # Floating OHLCV tooltip plugin
-python examples/tooltip_plugin.py
+python examples/12_tooltip_plugin/tooltip_plugin.py
 
 # Bollinger Bands using BandsIndicator plugin
-python examples/bands_indicator.py
+python examples/13_bands_indicator/bands_indicator.py
 
 # Volume-at-Price profile plugin
-python examples/volume_profile.py
+python examples/14_volume_profile/volume_profile.py
 
-# Price-level intensity heatmap series
-python examples/heatmap_series.py
+# Heatmap orderbook (bid/ask depth)
+python examples/15_heatmap_orderbook/heatmap_orderbook.py
+
+# PositionTool plugin
+python examples/16_positions/positions.py
+
+# StreamChart over HTTP/WebSocket
+python examples/17_stream_chart/stream_chart.py
+
+# Full showcase: multi-pane, indicators, callbacks, table, topbar
+python examples/18_full_example/full_example.py
 ```
 
 ## Feature index
 
 | Script | Feature demonstrated |
 |--------|----------------------|
-| `area_series.py` | `Chart.create_area()` with `top_color`, `bottom_color`, `line_color` |
-| `up_down_markers.py` | `Chart.create_up_down_markers(series)` |
-| `last_price_animation.py` | `create_line(last_price_animation='continuous')` |
-| `attach_primitive.py` | `Series.attach_primitive(js_expr)` / `AttachedPrimitive.detach()` |
-| `panes_api.py` | `add_pane()`, `get_pane_count()`, `move_pane()` (also see `resize_pane()`, `remove_pane()`) |
-| `session_highlighting.py` | `plugins.SessionHighlighting` |
-| `tooltip_plugin.py` | `plugins.Tooltip` |
-| `bands_indicator.py` | `plugins.BandsIndicator` |
-| `volume_profile.py` | `plugins.VolumeProfile` |
-| `heatmap_series.py` | `plugins.HeatmapSeries` |
+| `9_area_series/` | `Chart.create_area()` with `top_color`, `bottom_color`, `line_color` |
+| `10_last_price_animation/` | `create_line(last_price_animation='continuous')` |
+| `11_session_highlighting/` | `plugins.SessionHighlighting` |
+| `12_tooltip_plugin/` | `plugins.Tooltip` |
+| `13_bands_indicator/` | `plugins.BandsIndicator` |
+| `14_volume_profile/` | `plugins.VolumeProfile` |
+| `15_heatmap_orderbook/` | `plugins.HeatmapSeries` with orderbook bid/ask data |
+| `16_positions/` | `plugins.PositionTool` |
+| `17_stream_chart/` | `StreamChart` browser-served chart |
+| `18_full_example/` | Multi-pane indicators, callbacks, table, topbar |

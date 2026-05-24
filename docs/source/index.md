@@ -3,6 +3,8 @@
 :caption: TUTORIALS
 tutorials/getting_started
 tutorials/events
+tutorials/stream_chart
+tutorials/plugins
 ```
 
 
@@ -28,7 +30,7 @@ examples/gui_examples
 reference/index
 polygon
 
-Github Repository <https://github.com/louisnw01/lightweight-charts-python>
+Github Repository <https://github.com/gopalparashar421/lightweight-charts-python>
 ```
 
 

@@ -5,7 +5,7 @@
 To install the library, use pip:
 
 ```text
-pip install lightweight-charts
+pip install python-lightweight-charts
 ```
 
 Pywebview's installation can differ depending on OS. Please refer to their [documentation](https://pywebview.flowrl.com/guide/installation.html#installation).
@@ -40,10 +40,10 @@ In this example, we are reading a csv file using pandas:
 ```python
 if __name__ == '__main__':
     chart = Chart()
-    
+
     df = pd.read_csv('ohlcv.csv')
     chart.set(df)
-    
+
     chart.show(block=True)
 ```
 
@@ -56,7 +56,7 @@ Due to the library's use of multiprocessing, instantiations of `Chart` should be
 
 ## Adding a line
 
-Now lets add a moving average to the chart using the following function: 
+Now lets add a moving average to the chart using the following function:
 ```python
 def calculate_sma(df, period: int = 50):
     return pd.DataFrame({
@@ -77,11 +77,6 @@ if __name__ == '__main__':
 
     chart.set(df)
     line.set(sma_df)
-    
+
     chart.show(block=True)
 ```
-
-
-
-
-

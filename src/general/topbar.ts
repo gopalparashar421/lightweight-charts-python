@@ -182,5 +182,3 @@ export class TopBar {
         return width;
     }
 }
-
-

@@ -8063,7 +8063,7 @@
             }
             var ratio = (_b = (_a = this._devicePixelRatioObservable) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : win.devicePixelRatio;
             var canvasRects = this._canvasElement.getClientRects();
-            var newSize = 
+            var newSize =
             // eslint-disable-next-line no-negated-condition
             canvasRects[0] !== undefined ?
                 predictedBitmapSize(canvasRects[0], ratio) :
@@ -13759,7 +13759,7 @@
         return HorzScaleBehaviorTime;
     }
 
-    function drawSeriesPointMarkers(renderingScope, items, pointMarkersRadius, visibleRange, 
+    function drawSeriesPointMarkers(renderingScope, items, pointMarkersRadius, visibleRange,
     // the values returned by styleGetter are compared using the operator !==,
     // so if styleGetter returns objects, then styleGetter should return the same object for equal styles
     styleGetter) {
@@ -13796,7 +13796,7 @@
         return Math.hypot(p2x - p1x, p2y - p1y);
     }
     // eslint-disable-next-line max-params, complexity
-    function walkLine(renderingScope, items, lineType, visibleRange, barWidth, 
+    function walkLine(renderingScope, items, lineType, visibleRange, barWidth,
     // the values returned by styleGetter are compared using the operator !==,
     // so if styleGetter returns objects, then styleGetter should return the same object for equal styles
     styleGetter, finishStyledArea, dashPatternLength = 0) {
@@ -14311,7 +14311,7 @@
     };
 
     function generateWhitespaceData({ _internal_start: start, _internal_end: end, _internal_resolution: resolution, }) {
-        return Array.from({ length: Math.floor((end - start) / resolution) + 1 }, 
+        return Array.from({ length: Math.floor((end - start) / resolution) + 1 },
         // eslint-disable-next-line quote-props
         (item, i) => ({ 'time': start + i * resolution }));
     }

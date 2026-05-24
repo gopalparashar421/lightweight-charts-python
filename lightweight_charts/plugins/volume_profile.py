@@ -1,5 +1,5 @@
 import json
-from typing import Union, List
+
 import pandas as pd
 
 from ..util import Pane
@@ -24,27 +24,27 @@ class VolumeProfile(Pane):
         self,
         series,
         time,
-        profile: Union[List[dict], pd.DataFrame],
+        profile: list[dict] | pd.DataFrame,
         width: int = 10,
     ):
         super().__init__(series._chart.win)
         self._series = series
         ts = series._chart._single_datetime_format(time)
         profile_list = (
-            profile[['price', 'vol']].to_dict('records')
+            profile[["price", "vol"]].to_dict("records")
             if isinstance(profile, pd.DataFrame)
             else profile
         )
-        vp_data = {'time': ts, 'profile': profile_list, 'width': width}
-        self.run_script(f'''
+        vp_data = {"time": ts, "profile": profile_list, "width": width}
+        self.run_script(f"""
             {self.id} = new Lib.VolumeProfile(
                 {series._chart.id}.chart,
                 {series.id}.series,
                 {json.dumps(vp_data)}
             );
             {series.id}.series.attachPrimitive({self.id});
-        null''')
+        null""")
 
     def delete(self):
         """Detaches and removes the volume profile from the series."""
-        self.run_script(f'{self._series.id}.series.detachPrimitive({self.id})')
+        self.run_script(f"{self._series.id}.series.detachPrimitive({self.id})")

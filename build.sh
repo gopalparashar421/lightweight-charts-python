@@ -39,4 +39,3 @@ else
     exit 1
 fi
 echo -e "\n${GREEN}[BUILD SUCCESS]${NC}"
-
