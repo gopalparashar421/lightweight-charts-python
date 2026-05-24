@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import urllib.request
-from typing import List, Literal, Union
+from typing import Literal
 
 import pandas as pd
 
@@ -19,9 +19,7 @@ SEC_TYPE = Literal["stocks", "options", "indices", "forex", "crypto"]
 
 ch = logging.StreamHandler()
 ch.setFormatter(
-    logging.Formatter(
-        "%(asctime)s | [polygon.io] %(levelname)s: %(message)s", datefmt="%H:%M:%S"
-    )
+    logging.Formatter("%(asctime)s | [polygon.io] %(levelname)s: %(message)s", datefmt="%H:%M:%S")
 )
 ch.setLevel(logging.DEBUG)
 _log = logging.getLogger("polygon")
@@ -63,7 +61,7 @@ def _get_sec_type(ticker):
     if "/" in ticker:
         return "forex"
     for prefix, security_type in zip(
-        ("O:", "I:", "C:", "X:"), ("options", "indices", "forex", "crypto")
+        ("O:", "I:", "C:", "X:"), ("options", "indices", "forex", "crypto"), strict=False
     ):
         if ticker.startswith(prefix):
             return security_type
@@ -75,9 +73,7 @@ def _polygon_request(query_url):
     query_url = "https://api.polygon.io" + query_url
     query_url += f"&apiKey={api_key}"
 
-    request = urllib.request.Request(
-        query_url, headers={"User-Agent": "lightweight_charts/1.0"}
-    )
+    request = urllib.request.Request(query_url, headers={"User-Agent": "lightweight_charts/1.0"})
     with urllib.request.urlopen(request) as response:
         if response.status != 200:
             error = response.json()
@@ -90,15 +86,15 @@ def _polygon_request(query_url):
         return data["results"]
 
 
-def get_bar_data(
-    ticker: str, timeframe: str, start_date: str, end_date: str, limit: int = 5_000
-):
+def get_bar_data(ticker: str, timeframe: str, start_date: str, end_date: str, limit: int = 5_000):
     end_date = dt.datetime.now().strftime("%Y-%m-%d") if end_date == "now" else end_date
     mult, span = _convert_timeframe(timeframe)
     if "-" in ticker:
         ticker = ticker.replace("-", "")
 
-    query_url = f"/v2/aggs/ticker/{ticker}/range/{mult}/{span}/{start_date}/{end_date}?limit={limit}"
+    query_url = (
+        f"/v2/aggs/ticker/{ticker}/range/{mult}/{span}/{start_date}/{end_date}?limit={limit}"
+    )
     results = _polygon_request(query_url)
     if not results:
         return None
@@ -157,7 +153,7 @@ async def subscribe(ticker: str, sec_type: SEC_TYPE, func, args, precision=2):
 
 
 async def unsubscribe(func):
-    for key, data in _lasts.items():
+    for key, data in _lasts.items():  # noqa: B007 (key is used after the loop via for-else leak)
         if val := next(((f, args) for f, args in data["funcs"] if f == func), None):
             break
     else:
@@ -189,8 +185,8 @@ async def _websocket_connect(sec_type):
         await _send(sec_type, "auth", api_key)
         while 1:
             response = await ws.recv()
-            data_list: List[dict] = json.loads(response)
-            for i, data in enumerate(data_list):
+            data_list: list[dict] = json.loads(response)
+            for _i, data in enumerate(data_list):
                 if data["ev"] == "status":
                     _log.info(f"{data['message']}")
                     continue
@@ -308,9 +304,9 @@ class PolygonAPI:
         symbol: str,
         timeframe: str,
         start_date: str,
-        expiration: str = None,
-        right: Literal["C", "P"] = None,
-        strike: Union[int, float] = None,
+        expiration: str | None = None,
+        right: Literal["C", "P"] | None = None,
+        strike: int | float | None = None,
         end_date: str = "now",
         limit: int = 5_000,
         live: bool = False,
@@ -331,9 +327,7 @@ class PolygonAPI:
         if any((expiration, right, strike)):
             expiration = dt.datetime.strptime(expiration, "%Y-%m-%d").strftime("%y%m%d")
             symbol = f"{symbol}{expiration}{right}{strike * 1000:08d}"
-        return self.set(
-            "options", f"O:{symbol}", timeframe, start_date, end_date, limit, live
-        )
+        return self.set("options", f"O:{symbol}", timeframe, start_date, end_date, limit, live)
 
     def index(
         self,
@@ -353,9 +347,7 @@ class PolygonAPI:
         :param limit:       The limit of base aggregates queried to create the timeframe given (max 50_000).
         :param live:        If true, the data will be updated in real-time.
         """
-        return self.set(
-            "indices", f"I:{symbol}", timeframe, start_date, end_date, limit, live
-        )
+        return self.set("indices", f"I:{symbol}", timeframe, start_date, end_date, limit, live)
 
     def forex(
         self,
@@ -375,9 +367,7 @@ class PolygonAPI:
         :param limit:       The limit of base aggregates queried to create the timeframe given (max 50_000).
         :param live:        If true, the data will be updated in real-time.
         """
-        return self.set(
-            "forex", f"C:{fiat_pair}", timeframe, start_date, end_date, limit, live
-        )
+        return self.set("forex", f"C:{fiat_pair}", timeframe, start_date, end_date, limit, live)
 
     def crypto(
         self,
@@ -397,9 +387,7 @@ class PolygonAPI:
         :param limit:       The limit of base aggregates queried to create the timeframe given (max 50_000).
         :param live:        If true, the data will be updated in real-time.
         """
-        return self.set(
-            "crypto", f"X:{crypto_pair}", timeframe, start_date, end_date, limit, live
-        )
+        return self.set("crypto", f"X:{crypto_pair}", timeframe, start_date, end_date, limit, live)
 
     async def async_stock(
         self,
@@ -410,18 +398,16 @@ class PolygonAPI:
         limit: int = 5_000,
         live: bool = False,
     ) -> bool:
-        return await self.async_set(
-            "stocks", symbol, timeframe, start_date, end_date, limit, live
-        )
+        return await self.async_set("stocks", symbol, timeframe, start_date, end_date, limit, live)
 
     async def async_option(
         self,
         symbol: str,
         timeframe: str,
         start_date: str,
-        expiration: str = None,
-        right: Literal["C", "P"] = None,
-        strike: Union[int, float] = None,
+        expiration: str | None = None,
+        right: Literal["C", "P"] | None = None,
+        strike: int | float | None = None,
         end_date: str = "now",
         limit: int = 5_000,
         live: bool = False,
@@ -511,17 +497,15 @@ class PolygonChart(Chart):
         toolbox: bool = True,
         width: int = 800,
         height: int = 600,
-        x: int = None,
-        y: int = None,
+        x: int | None = None,
+        y: int | None = None,
         on_top: bool = False,
         maximize: bool = False,
         debug: bool = False,
         title: str = "",
-        screen: int = None,
+        screen: int | None = None,
     ):
-        super().__init__(
-            width, height, x, y, title, screen, on_top, maximize, debug, toolbox
-        )
+        super().__init__(width, height, x, y, title, screen, on_top, maximize, debug, toolbox)
 
         self.num_bars = num_bars
         self.end_date = end_date
@@ -538,12 +522,8 @@ class PolygonChart(Chart):
         self.crosshair(vert_visible=False, horz_visible=False)
 
         self.topbar.textbox("symbol")
-        self.topbar.switcher(
-            "timeframe", timeframe_options, func=self._on_timeframe_selection
-        )
-        self.topbar.switcher(
-            "security", security_options, func=self._on_security_selection
-        )
+        self.topbar.switcher("timeframe", timeframe_options, func=self._on_timeframe_selection)
+        self.topbar.switcher("security", security_options, func=self._on_security_selection)
 
         self.run_script(f"""
         {self.id}.search.window.style.display = "flex"
@@ -571,9 +551,7 @@ class PolygonChart(Chart):
             remaining_bars -= 1
         epoch = dt.datetime.fromtimestamp(0)
         start_date = epoch if start_date < epoch else start_date
-        success = await getattr(
-            self.polygon, "async_" + self.topbar["security"].value.lower()
-        )(
+        success = await getattr(self.polygon, "async_" + self.topbar["security"].value.lower())(
             symbol,
             timeframe=self.topbar["timeframe"].value,
             start_date=start_date.strftime("%Y-%m-%d"),
@@ -586,14 +564,10 @@ class PolygonChart(Chart):
         return success
 
     async def on_search(self, chart, searched_string):
-        chart.topbar["symbol"].set(
-            searched_string if await self._polygon(searched_string) else ""
-        )
+        chart.topbar["symbol"].set(searched_string if await self._polygon(searched_string) else "")
 
     async def _on_timeframe_selection(self, chart):
-        await self._polygon(chart.topbar["symbol"].value) if chart.topbar[
-            "symbol"
-        ].value else None
+        await self._polygon(chart.topbar["symbol"].value) if chart.topbar["symbol"].value else None
 
     async def _on_security_selection(self, chart):
         self.precision(5 if chart.topbar["security"].value == "Forex" else 2)

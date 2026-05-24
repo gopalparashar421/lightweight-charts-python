@@ -6,10 +6,10 @@ from .tooltip import Tooltip
 from .volume_profile import VolumeProfile
 
 __all__ = [
+    "BandsIndicator",
+    "HeatmapSeries",
+    "PositionTool",
     "SessionHighlighting",
     "Tooltip",
-    "HeatmapSeries",
-    "BandsIndicator",
     "VolumeProfile",
-    "PositionTool",
 ]

@@ -1,25 +1,26 @@
-import pandas as pd
 from time import sleep
+
+import pandas as pd
+
 from lightweight_charts import Chart
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     chart = Chart()
 
-    df1 = pd.read_csv('ohlcv.csv')
-    df2 = pd.read_csv('next_ohlcv.csv')
+    df1 = pd.read_csv("ohlcv.csv")
+    df2 = pd.read_csv("next_ohlcv.csv")
 
     chart.set(df1)
 
     chart.show()
 
-    last_close = df1.iloc[-1]['close']
+    last_close = df1.iloc[-1]["close"]
 
-    for i, series in df2.iterrows():
+    for _i, series in df2.iterrows():
         chart.update(series)
 
-        if series['close'] > 20 and last_close < 20:
-            chart.marker(text='The price crossed $20!')
+        if series["close"] > 20 and last_close < 20:
+            chart.marker(text="The price crossed $20!")
 
-        last_close = series['close']
+        last_close = series["close"]
         sleep(0.1)

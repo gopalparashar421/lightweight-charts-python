@@ -57,18 +57,14 @@ try:
 
     from IPython.display import HTML, display
 
-    warnings.filterwarnings(
-        "ignore", category=UserWarning, module="IPython.core.display"
-    )
+    warnings.filterwarnings("ignore", category=UserWarning, module="IPython.core.display")
 except ImportError:
     HTML = None
 
 
 def emit_callback(window, string):
     func, args = parse_event_message(window, string)
-    asyncio.create_task(func(*args)) if inspect.iscoroutinefunction(func) else func(
-        *args
-    )
+    asyncio.create_task(func(*args)) if inspect.iscoroutinefunction(func) else func(*args)
 
 
 class WxChart(abstract.AbstractChart):
@@ -126,9 +122,7 @@ class QtChart(abstract.AbstractChart):
             )
         self.webview = QWebEngineView(widget)
         super().__init__(
-            abstract.Window(
-                self.webview.page().runJavaScript, "window.pythonObject.callback"
-            ),
+            abstract.Window(self.webview.page().runJavaScript, "window.pythonObject.callback"),
             inner_width,
             inner_height,
             scale_candles_only,
@@ -155,9 +149,7 @@ class QtChart(abstract.AbstractChart):
 
         """)
         )
-        self.webview.loadFinished.connect(
-            lambda: QTimer.singleShot(200, self.win.on_js_load)
-        )
+        self.webview.loadFinished.connect(lambda: QTimer.singleShot(200, self.win.on_js_load))
         if using_pyside6:
             self.webview.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.webview.load(QUrl.fromLocalFile(abstract.INDEX))
@@ -183,9 +175,7 @@ class StaticLWC(abstract.AbstractChart):
         with open(abstract.INDEX.replace("index.html", "bundle.js")) as f:
             js = f.read()
         with open(
-            abstract.INDEX.replace(
-                "index.html", "lightweight-charts.standalone.development.js"
-            ),
+            abstract.INDEX.replace("index.html", "lightweight-charts.standalone.development.js"),
         ) as f:
             lwc = f.read()
         plugins_path = abstract.INDEX.replace("index.html", "plugins.js")
@@ -197,12 +187,8 @@ class StaticLWC(abstract.AbstractChart):
         with open(abstract.INDEX) as f:
             self._html = (
                 f.read()
-                .replace(
-                    '<link rel="stylesheet" href="styles.css">', f"<style>{css}</style>"
-                )
-                .replace(
-                    ' src="./lightweight-charts.standalone.development.js">', f">{lwc}"
-                )
+                .replace('<link rel="stylesheet" href="styles.css">', f"<style>{css}</style>")
+                .replace(' src="./lightweight-charts.standalone.development.js">', f">{lwc}")
                 .replace(' src="./bundle.js">', f">{js}")
                 .replace("</body>\n</html>", "<script>")
             )
@@ -246,18 +232,14 @@ class StreamlitChart(StaticLWC):
         scale_candles_only: bool = False,
         toolbox: bool = False,
     ):
-        super().__init__(
-            width, height, inner_width, inner_height, scale_candles_only, toolbox
-        )
+        super().__init__(width, height, inner_width, inner_height, scale_candles_only, toolbox)
 
     def _load(self):
         if sthtml is None:
             raise ModuleNotFoundError(
                 "streamlit.components.v1.html was not found, and must be installed to use StreamlitChart."
             )
-        sthtml(
-            f"{self._html}</script></body></html>", width=self.width, height=self.height
-        )
+        sthtml(f"{self._html}</script></body></html>", width=self.width, height=self.height)
 
 
 class JupyterChart(StaticLWC):

@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 from ..util import Pane
 
@@ -35,7 +34,7 @@ class SessionHighlighting(Pane):
             {series.id}.series.attachPrimitive({self.id});
         null""")
 
-    def set_sessions(self, sessions: List[dict]):
+    def set_sessions(self, sessions: list[dict]):
         """
         Sets the time ranges to highlight.
 

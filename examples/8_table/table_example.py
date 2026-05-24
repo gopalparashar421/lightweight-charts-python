@@ -103,7 +103,7 @@ if __name__ == "__main__":
     table.header[0] = "Market Overview"
 
     # ── Populate rows ───────────────────────────────────────────────────────
-    for sym, o, h, l, c, vol, chg in SUMMARY:  # noqa: E741
+    for sym, o, h, l, c, vol, chg in SUMMARY:
         row = table.new_row(
             sym,
             round(o, 2),

@@ -1,5 +1,4 @@
 import json
-from typing import List, Optional
 
 import pandas as pd
 
@@ -42,13 +41,13 @@ class HeatmapSeries(Pane):
     def __init__(
         self,
         chart,
-        cell_shader_js: Optional[str] = None,
+        cell_shader_js: str | None = None,
         cell_border_width: int = 1,
         cell_border_color: str = "transparent",
         bid_color: str = "rgba(0, 160, 80, 0.6)",
         ask_color: str = "rgba(200, 50, 50, 0.6)",
-        bid_shader_js: Optional[str] = None,
-        ask_shader_js: Optional[str] = None,
+        bid_shader_js: str | None = None,
+        ask_shader_js: str | None = None,
         pane_index: int = 0,
     ):
         super().__init__(chart.win)
@@ -104,8 +103,8 @@ class HeatmapSeries(Pane):
     def set(
         self,
         time,
-        bids: List[tuple],
-        asks: List[tuple],
+        bids: list[tuple],
+        asks: list[tuple],
     ):
         """
         Replace all heatmap data with a single orderbook snapshot at *time*.
@@ -133,15 +132,13 @@ class HeatmapSeries(Pane):
                 cell["color"] = self._ask_color
             cells.append(cell)
         ts = int(pd.Timestamp(time).timestamp())
-        self.run_script(
-            f"{self.id}.setData({json.dumps([{'time': ts, 'cells': cells}])})"
-        )
+        self.run_script(f"{self.id}.setData({json.dumps([{'time': ts, 'cells': cells}])})")
 
     def update(
         self,
         time,
-        bids: List[tuple],
-        asks: List[tuple],
+        bids: list[tuple],
+        asks: list[tuple],
     ):
         """
         Append or update the heatmap bar at *time* with a new orderbook snapshot.
@@ -170,7 +167,7 @@ class HeatmapSeries(Pane):
             cells.append(cell)
         self._update(time, cells)
 
-    def _update(self, time, cells: List[dict]):
+    def _update(self, time, cells: list[dict]):
         """
         Appends or updates a single bar.
 

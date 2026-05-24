@@ -2,8 +2,6 @@ import inspect
 
 import pandas as pd
 
-from lightweight_charts.abstract import SeriesCommon
-
 from .util import LINE_STYLE, NUM, TIME, Pane, as_enum
 
 
@@ -75,9 +73,7 @@ class TwoPointDrawing(Drawing):
 
 
 class HorizontalLine(Drawing):
-    def __init__(
-        self, chart, price, color, width, style, text, axis_label_visible, func
-    ):
+    def __init__(self, chart, price, color, width, style, text, axis_label_visible, func):
         super().__init__(chart, func)
         self.price = price
         self.run_script(f"""
@@ -105,9 +101,7 @@ class HorizontalLine(Drawing):
             self.price = float(p)
             await func(chart, self)
 
-        self.win.handlers[self.id] = (
-            wrapper_async if inspect.iscoroutinefunction(func) else wrapper
-        )
+        self.win.handlers[self.id] = wrapper_async if inspect.iscoroutinefunction(func) else wrapper
         self.run_script(f"{chart.id}.toolBox?.addNewDrawing({self.id})")
 
     def update(self, price: float):
@@ -251,7 +245,7 @@ class TrendLine(TwoPointDrawing):
 class VerticalSpan(Pane):
     def __init__(
         self,
-        series: SeriesCommon,
+        series,
         start_time: TIME | tuple | list,
         end_time: TIME | None = None,
         color: str = "rgba(252, 219, 3, 0.2)",

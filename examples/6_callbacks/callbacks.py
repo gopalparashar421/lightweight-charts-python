@@ -19,9 +19,7 @@ def on_search(chart, searched_string):  # Called when the user searches.
 
 
 def on_timeframe_selection(chart):  # Called when the user changes the timeframe.
-    new_data = get_bar_data(
-        chart.topbar["symbol"].value, chart.topbar["timeframe"].value
-    )
+    new_data = get_bar_data(chart.topbar["symbol"].value, chart.topbar["timeframe"].value)
     if new_data.empty:
         return
     chart.set(new_data, True)

@@ -3,7 +3,7 @@ import inspect
 import json
 from datetime import datetime
 from random import choices
-from typing import Literal, Union
+from typing import Literal
 
 import pandas as pd
 
@@ -40,18 +40,15 @@ def parse_event_message(window, string):
     return func, args
 
 
-def js_data(data: Union[pd.DataFrame, pd.Series]):
+def js_data(data: pd.DataFrame | pd.Series):
     if isinstance(data, pd.DataFrame):
         d = data.to_dict(orient="records")
         filtered_records = [
-            {k: v for k, v in record.items() if v is not None and not pd.isna(v)}
-            for record in d
+            {k: v for k, v in record.items() if v is not None and not pd.isna(v)} for record in d
         ]
     else:
         d = data.to_dict()
-        filtered_records = {
-            k: v for k, v in d.items() if v is not None and not pd.isna(v)
-        }
+        filtered_records = {k: v for k, v in d.items() if v is not None and not pd.isna(v)}
     return json.dumps(filtered_records, indent=2)
 
 
@@ -89,9 +86,9 @@ PRICE_SCALE_MODE = Literal["normal", "logarithmic", "percentage", "index100"]
 
 LAST_PRICE_ANIMATION_MODE = Literal["disabled", "continuous", "on_new_bar"]
 
-TIME = Union[datetime, pd.Timestamp, str, float]
+TIME = datetime | pd.Timestamp | str | float
 
-NUM = Union[float, int]
+NUM = float | int
 
 FLOAT = Literal["left", "right", "top", "bottom"]
 
@@ -146,9 +143,9 @@ class JSEmitter:
             )
 
         async def final_async_wrapper(*arg):
-            await other(
-                self._chart, *arg
-            ) if not self._wrapper else await self._wrapper(other, self._chart, *arg)
+            await other(self._chart, *arg) if not self._wrapper else await self._wrapper(
+                other, self._chart, *arg
+            )
 
         self._chart.win.handlers[self._name] = (
             final_async_wrapper if inspect.iscoroutinefunction(other) else final_wrapper

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from ..util import NUM, TIME, Pane
 
@@ -11,7 +11,7 @@ def _js_num(v) -> str:
     return "null" if v is None else str(v)
 
 
-def _js_str(v: Optional[str]) -> str:
+def _js_str(v: str | None) -> str:
     """Return ``'null'`` for ``None``, otherwise a JS single-quoted string."""
     return "null" if v is None else f"'{v}'"
 
@@ -53,7 +53,7 @@ class PositionTool(Pane):
         stop: NUM,
         target: NUM,
         entry_time: TIME,
-        end_time: Optional[TIME] = None,
+        end_time: TIME | None = None,
         stop_color: str = "rgba(239, 83, 80, 0.25)",
         target_color: str = "rgba(38, 166, 154, 0.25)",
     ):
@@ -64,9 +64,7 @@ class PositionTool(Pane):
 
         chart = series._chart
         entry_ts = chart._single_datetime_format(entry_time)
-        end_ts = (
-            chart._single_datetime_format(end_time) if end_time is not None else "null"
-        )
+        end_ts = chart._single_datetime_format(end_time) if end_time is not None else "null"
 
         self.run_script(f"""
             {self.id} = new Lib.PositionTool({{
@@ -85,10 +83,10 @@ class PositionTool(Pane):
 
     def update(
         self,
-        entry: Optional[NUM] = None,
-        stop: Optional[NUM] = None,
-        target: Optional[NUM] = None,
-        end_time: Optional[TIME] = None,
+        entry: NUM | None = None,
+        stop: NUM | None = None,
+        target: NUM | None = None,
+        end_time: TIME | None = None,
     ) -> None:
         """
         Update one or more position parameters.

@@ -1,5 +1,4 @@
 import json
-from typing import List, Union
 
 import pandas as pd
 
@@ -25,7 +24,7 @@ class VolumeProfile(Pane):
         self,
         series,
         time,
-        profile: Union[List[dict], pd.DataFrame],
+        profile: list[dict] | pd.DataFrame,
         width: int = 10,
     ):
         super().__init__(series._chart.win)

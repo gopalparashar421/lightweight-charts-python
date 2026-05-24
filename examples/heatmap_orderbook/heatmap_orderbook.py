@@ -1,4 +1,4 @@
-﻿"""
+"""
 Heatmap Series – Orderbook Visualisation
 =========================================
 Demonstrates feeding orderbook (bid/ask) data into a HeatmapSeries with
@@ -25,12 +25,12 @@ np.random.seed(42)
 
 # ── 1. Simulate a price series ───────────────────────────────────────────────
 N = 100
-dates = pd.date_range('2024-01-01', periods=N, freq='h')
+dates = pd.date_range("2024-01-01", periods=N, freq="h")
 prices = 100.0 + np.cumsum(np.random.randn(N) * 0.5)
 
 # ── 2. Helper: build a synthetic orderbook around a mid price ────────────────
-DEPTH = 10    # price levels on each side
-TICK  = 0.5   # spacing between levels
+DEPTH = 10  # price levels on each side
+TICK = 0.5  # spacing between levels
 MAX_SIZE = 300
 
 
@@ -66,7 +66,7 @@ ask_shader_js = f"""(amount) => {{
 }}"""
 
 # ── 4. Build chart ────────────────────────────────────────────────────────────
-if __name__ == '__main__':
+if __name__ == "__main__":
     chart = Chart()
 
     heatmap = HeatmapSeries(
@@ -82,13 +82,13 @@ if __name__ == '__main__':
     heatmap.set(dates[0], first_bids, first_asks)
 
     # Stream the remaining snapshots with update() – appends each bar
-    for date, price in zip(dates[1:], prices[1:]):
+    for date, price in zip(dates[1:], prices[1:], strict=False):
         bids, asks = make_orderbook(price)
         heatmap.update(date, bids, asks)
 
     # Price line on top of the heatmap
-    line = chart.create_line(name='Price', color='white', width=2, pane_index=0)
-    line.set(pd.DataFrame({'time': dates, 'Price': prices}))
+    line = chart.create_line(name="Price", color="white", width=2, pane_index=0)
+    line.set(pd.DataFrame({"time": dates, "Price": prices}))
 
     chart.fit()
     chart.show(block=True)

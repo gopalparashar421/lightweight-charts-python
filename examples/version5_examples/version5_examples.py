@@ -2,42 +2,54 @@ import pandas as pd
 from time import sleep
 from lightweight_charts import Chart
 
-if __name__ == '__main__':
-    chart = Chart(inner_height=1, debug=True)
-    chart.layout(background_color='#090c0e', text_color='#FFFFFF')
 
-    df = pd.read_csv('data.csv')
+def make_toggle(series):
+    def _toggle(c):
+        if chart.topbar[series.name].value:
+            series.hide_data()
+        else:
+            series.show_data()
+
+    return _toggle
+
+
+if __name__ == "__main__":
+    chart = Chart(inner_height=1, debug=False)
+    chart.layout(background_color="#090c0e", text_color="#FFFFFF")
+
+    df = pd.read_csv("data.csv")
     chart.set(df)
     chart.legend(visible=True, ohlc=True, percent=True, lines=True)
 
     # ── Pane 0: candlestick + KAMA overlays ──────────────────────────────────
-    kama10 = chart.create_line('KAMA_10_2_5',  color='#E91E63', pane_index=0)
-    kama10.set(df[['time', 'KAMA_10_2_5']])
+    kama10 = chart.create_line("KAMA_10_2_5", color="#E91E63", pane_index=0)
+    kama10.set(df[["time", "KAMA_10_2_5"]])
 
-    kama20 = chart.create_line('KAMA_20_2_10', color='#2196F3', pane_index=0)
-    kama20.set(df[['time', 'KAMA_20_2_10']])
+    kama20 = chart.create_line("KAMA_20_2_10", color="#2196F3", pane_index=0)
+    kama20.set(df[["time", "KAMA_20_2_10"]])
 
     # ── Pane 1: ADX / directional movement ───────────────────────────────────
     chart.add_pane()
-    adx  = chart.create_line('ADX_10',    color='#FFD700', pane_index=1)
-    adxr = chart.create_line('ADXR_10_2', color='#FF6B35', pane_index=1)
-    dmp  = chart.create_line('DMP_10',    color='#4CAF50', pane_index=1)
-    dmn  = chart.create_line('DMN_10',    color='#F44336', pane_index=1)
-    adx.set(df[['time', 'ADX_10']])
-    adxr.set(df[['time', 'ADXR_10_2']])
-    dmp.set(df[['time', 'DMP_10']])
-    dmn.set(df[['time', 'DMN_10']])
+    adx = chart.create_line("ADX_10", color="#FFD700", pane_index=1)
+    adxr = chart.create_line("ADXR_10_2", color="#FF6B35", pane_index=1)
+    dmp = chart.create_line("DMP_10", color="#4CAF50", pane_index=1)
+    dmn = chart.create_line("DMN_10", color="#F44336", pane_index=1)
+    adx.set(df[["time", "ADX_10"]])
+    adxr.set(df[["time", "ADXR_10_2"]])
+    dmp.set(df[["time", "DMP_10"]])
+    dmn.set(df[["time", "DMN_10"]])
     adx.legend(visible=True)
     # ── Pane 2: RSI ───────────────────────────────────────────────────────────
     chart.add_pane()
-    rsi = chart.create_area('ULT_RSI_10', line_color='#9C27B0', pane_index=2)
-    rsi.set(df[['time', 'ULT_RSI_10']])
+    rsi = chart.create_area("ULT_RSI_10", line_color="#9C27B0", pane_index=2)
+    rsi.set(df[["time", "ULT_RSI_10"]])
     rsi.legend(visible=True)
     # ── Pane 3: Bollinger %B ─────────────────────────────────────────────────
     chart.add_pane()
-    bbp = chart.create_line('BBP_20_2.0_2.0', color='#00BCD4', pane_index=3)
-    bbp.set(df[['time', 'BBP_20_2.0_2.0']])
+    bbp = chart.create_line("BBP_20_2.0_2.0", color="#00BCD4", pane_index=3)
+    bbp.set(df[["time", "BBP_20_2.0_2.0"]])
     bbp.legend(visible=True)
+
     # ── Callbacks ─────────────────────────────────────────────────────────────
     def on_dbl_click(c, time, price):
         print(f"[DblClick] time={time}, price={price:.4f}")
@@ -57,20 +69,30 @@ if __name__ == '__main__':
             print(f"[TableClick] row={dict(row)!r}")
 
     table = chart.create_table(
-        width=220, height=160,
-        headings=('Symbol', 'Price', 'Chg'),
+        width=220,
+        height=160,
+        headings=("Symbol", "Price", "Chg"),
         widths=(0.4, 0.3, 0.3),
-        alignments=('left', 'right', 'right'),
-        position='right',
+        alignments=("left", "right", "right"),
+        position="right",
         draggable=True,
         return_clicked_cells=True,
     )
-    btc_row = table.new_row('BTC', '95000', '+1.2%')
-    eth_row = table.new_row('ETH', '3500',  '-0.5%')
-    sol_row = table.new_row('SOL', '180',   '+3.1%')
-    btc_row.background_color('Chg', 'rgba(76,175,80,0.25)')
-    eth_row.background_color('Chg', 'rgba(244,67,54,0.25)')
-    sol_row.background_color('Chg', 'rgba(76,175,80,0.25)')
+    btc_row = table.new_row("BTC", "95000", "+1.2%")
+    eth_row = table.new_row("ETH", "3500", "-0.5%")
+    sol_row = table.new_row("SOL", "180", "+3.1%")
+    btc_row.background_color("Chg", "rgba(76,175,80,0.25)")
+    eth_row.background_color("Chg", "rgba(244,67,54,0.25)")
+    sol_row.background_color("Chg", "rgba(76,175,80,0.25)")
+
+    chart.topbar.button("KAMA_10_2_5", "KAMA10", toggle=True, func=make_toggle(kama10))
+    chart.topbar.button("KAMA_20_2_10", "KAMA20", toggle=True, func=make_toggle(kama20))
+    chart.topbar.button("ADX_10", "ADX", toggle=True, func=make_toggle(adx))
+    chart.topbar.button("ADXR_10_2", "ADXR", toggle=True, func=make_toggle(adxr))
+    chart.topbar.button("DMP_10", "DMP+", toggle=True, func=make_toggle(dmp))
+    chart.topbar.button("DMN_10", "DMN-", toggle=True, func=make_toggle(dmn))
+    chart.topbar.button("ULT_RSI_10", "RSI", toggle=True, func=make_toggle(rsi))
+    chart.topbar.button("BBP_20_2.0_2.0", "BBP", toggle=True, func=make_toggle(bbp))
 
     # ── Boot ──────────────────────────────────────────────────────────────────
     # show(block=False) starts webview + waits for page load.
@@ -98,7 +120,7 @@ if __name__ == '__main__':
     # crosshair: set then clear using first kama10 point
     first = kama10.data_by_index(0)
     if first:
-        chart.set_crosshair_position(first['value'], first['time'], kama10)
+        chart.set_crosshair_position(first["value"], first["time"], kama10)
         print(f"set_crosshair_position → t={first['time']}, v={first['value']:.4f}")
         chart.clear_crosshair_position()
         print("clear_crosshair_position → ok")
@@ -113,8 +135,8 @@ if __name__ == '__main__':
     panes[2].set_stretch_factor(1.0)
 
     for i, p in enumerate(panes):
-        sf    = p.get_stretch_factor()
-        h     = p.get_height()
+        sf = p.get_stretch_factor()
+        h = p.get_height()
         names = [s.name for s in p.get_series()]
         print(f"  pane[{i}]: idx={p.pane_index()}, stretch={sf:.1f}, h={h}px, series={names}")
 
@@ -137,7 +159,7 @@ if __name__ == '__main__':
     print(f"kama10 bars_in_logical_range(0,10): {kama10.bars_in_logical_range(0, 10)}")
 
     if data:
-        coord = kama10.price_to_coordinate(data[0]['value'])
+        coord = kama10.price_to_coordinate(data[0]["value"])
         print(f"price_to_coordinate({data[0]['value']:.2f}): {coord}")
         if coord:
             back = kama10.coordinate_to_price(coord)
@@ -156,8 +178,8 @@ if __name__ == '__main__':
     sleep(10)
     kama10.move_to_pane(0)
     print(f"kama10 after move_to_pane(0): pane={kama10.get_pane().pane_index()}")
-    
+
     print("Removing (hiding) ADX series...")
-    
+
     print("\n[Ready — interact with chart; click table rows to test callback]")
     chart.show(block=True)

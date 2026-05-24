@@ -117,9 +117,7 @@ class StreamWindow:
         @app.get("/")
         async def serve_stream_html():
             headers = {
-                "Content-Security-Policy": (
-                    "default-src 'self'; script-src 'self' 'unsafe-eval'"
-                )
+                "Content-Security-Policy": ("default-src 'self'; script-src 'self' 'unsafe-eval'")
             }
             return FileResponse(
                 os.path.join(_JS_DIR, "stream.html"),
@@ -152,9 +150,7 @@ class StreamWindow:
 
             # --- single-client guard ---
             if self._ws is not None:
-                print(
-                    "WARNING: A second client attempted to connect; rejected with code 4002."
-                )
+                print("WARNING: A second client attempted to connect; rejected with code 4002.")
                 await websocket.close(code=4002)
                 return
 
@@ -231,8 +227,8 @@ class StreamChart(AbstractChart):
         self,
         width: int = 800,
         height: int = 600,
-        x: int = None,
-        y: int = None,
+        x: int | None = None,
+        y: int | None = None,
         on_top: bool = False,
         maximize: bool = False,
         toolbox: bool = False,

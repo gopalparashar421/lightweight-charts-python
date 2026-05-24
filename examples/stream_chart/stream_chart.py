@@ -22,15 +22,13 @@ Tips
       chart.show(port=8080, host='0.0.0.0', block=True)
   WARNING: This exposes the server on your network.
 """
-import os
+
 import pandas as pd
 from lightweight_charts import StreamChart
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "1_setting_data", "ohlcv.csv")
-
 
 def main():
-    df = pd.read_csv(DATA_PATH)
+    df = pd.read_csv("data.csv")
 
     chart = StreamChart()
     chart.set(df)
