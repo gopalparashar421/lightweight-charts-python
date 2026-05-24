@@ -35,13 +35,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install package and docs dependencies
-        run: |
-          uv pip install --system .
-          uv pip install --system -r docs/requirements.txt
+        run: uv sync --group docs
 
       - name: Build Sphinx docs (warnings as errors)
         run: |
-          sphinx-build -W --keep-going -b html docs/source docs/_build/html
+          uv run sphinx-build -W --keep-going -b html docs/source docs/_build/html
 
       - name: Upload docs artifact (for PR preview)
         if: github.event_name == 'pull_request'
