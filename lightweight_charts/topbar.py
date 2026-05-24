@@ -1,4 +1,5 @@
 import inspect
+from collections.abc import Callable
 from typing import Literal
 
 from .util import Pane, jbool
@@ -7,7 +8,7 @@ ALIGN = Literal["left", "right"]
 
 
 class Widget(Pane):
-    def __init__(self, topbar, value, func: callable | None = None, convert_boolean=False):
+    def __init__(self, topbar, value, func: Callable | None = None, convert_boolean=False):
         super().__init__(topbar.win)
         self.value = value
 
@@ -117,7 +118,7 @@ class TopBar(Pane):
         options: tuple,
         default: str | None = None,
         align: ALIGN = "left",
-        func: callable | None = None,
+        func: Callable | None = None,
     ):
         self._create()
         self._widgets[name] = SwitcherWidget(
@@ -131,7 +132,7 @@ class TopBar(Pane):
         default: str | None = None,
         separator: bool = True,
         align: ALIGN = "left",
-        func: callable | None = None,
+        func: Callable | None = None,
     ):
         self._create()
         self._widgets[name] = MenuWidget(
@@ -143,7 +144,7 @@ class TopBar(Pane):
         name: str,
         initial_text: str = "",
         align: ALIGN = "left",
-        func: callable | None = None,
+        func: Callable | None = None,
     ):
         self._create()
         self._widgets[name] = TextWidget(self, initial_text, align, func)
@@ -155,7 +156,7 @@ class TopBar(Pane):
         separator: bool = True,
         align: ALIGN = "left",
         toggle: bool = False,
-        func: callable | None = None,
+        func: Callable | None = None,
     ):
         self._create()
         self._widgets[name] = ButtonWidget(self, button_text, separator, align, toggle, func)
