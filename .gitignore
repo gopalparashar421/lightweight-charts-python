@@ -20,3 +20,4 @@ uv.lock
 /.github/reference
 /.github/skills
 /agent-output
+/docs/_build
