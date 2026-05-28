@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — 1.1.0
+
+### Added
+
+- **`PositionTool` hover labels** — hovering the risk/reward overlay now shows entry price (blue line), TP/SL prices at left corners, R:R ratio and bar count on the entry line, and win/lose amounts at right corners; pass `quantity=N` for monetary display (`+$125.00`) or omit for price-distance display
+
+---
+
 ## [1.0.0] — 2026-05-24 — First Public Release
 
 First release published under the name **`python-lightweight-charts`** on PyPI,
