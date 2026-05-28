@@ -368,7 +368,7 @@ class SeriesCommon(_PaneBase):
         Creates multiple position overlays.\n
         :param positions: list of dicts with keys: ``entry``, ``stop``, ``target``,
             ``entry_time``, and optionally ``end_time``, ``stop_color``,
-            ``target_color``.\n
+            ``target_color``, ``quantity``.\n
         :return: list of position ids.
         """
         ids = []
@@ -381,6 +381,7 @@ class SeriesCommon(_PaneBase):
                 end_time=pos.get("end_time"),
                 stop_color=pos.get("stop_color", "rgba(239, 83, 80, 0.25)"),
                 target_color=pos.get("target_color", "rgba(38, 166, 154, 0.25)"),
+                quantity=pos.get("quantity"),
             )
             ids.append(pid)
         return ids
@@ -394,6 +395,7 @@ class SeriesCommon(_PaneBase):
         end_time: TIME | None = None,
         stop_color: str = "rgba(239, 83, 80, 0.25)",
         target_color: str = "rgba(38, 166, 154, 0.25)",
+        quantity: NUM | None = None,
     ) -> str:
         """
         Creates a new position overlay.\n
@@ -404,6 +406,7 @@ class SeriesCommon(_PaneBase):
         :param end_time:     Optional right-edge timestamp. ``None`` = auto-track.
         :param stop_color:   Fill colour of the risk zone rectangle.
         :param target_color: Fill colour of the reward zone rectangle.
+        :param quantity:     Number of units/contracts for monetary win/lose display.
         :return: The id of the position overlay.
         """
         from .plugins.position_tool import PositionTool as _PositionTool
@@ -418,6 +421,7 @@ class SeriesCommon(_PaneBase):
             end_time=end_time,
             stop_color=stop_color,
             target_color=target_color,
+            quantity=quantity,
         )
         self.positions[position_id] = pt
         return position_id

@@ -219,6 +219,35 @@ ___
 Unsubscribes from data-change events.
 
 ```
+___
+
+```{py:method} position(entry: NUM, stop: NUM, target: NUM, entry_time: TIME, end_time: TIME, stop_color: COLOR, target_color: COLOR, quantity: NUM) -> PositionTool
+
+Attaches a `PositionTool` overlay to this series. A shorthand for constructing
+`PositionTool(series, ...)` directly.
+
+* `entry` / `stop` / `target` — trade price levels.
+* `entry_time` — timestamp of the entry bar (left edge of overlay).
+* `end_time` — *(optional)* right-edge timestamp; auto-tracks latest bar if omitted.
+* `stop_color` / `target_color` — fill colours for the risk/reward zones.
+* `quantity` — *(optional)* units/contracts for monetary P&L display. Must be > 0.
+
+Returns the created `PositionTool` instance.
+
+```
+___
+
+```{py:method} position_list(positions: list) -> list
+
+Creates multiple `PositionTool` overlays in a single call.
+
+Each element of `positions` is a dict with keys matching the parameters of
+`position()`: `entry`, `stop`, `target`, `entry_time`, and optionally
+`end_time`, `stop_color`, `target_color`, `quantity`.
+
+Returns a list of `PositionTool` instances.
+
+```
 
 ````
 

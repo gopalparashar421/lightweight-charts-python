@@ -44,6 +44,9 @@ class PositionTool(Pane):
     :param end_time:         Optional right-edge timestamp.  ``None`` = auto.
     :param stop_color:       Fill colour of the risk zone rectangle.
     :param target_color:     Fill colour of the reward zone rectangle.
+    :param quantity:         Number of units/contracts.  When provided, the
+                             hover overlay shows monetary win/lose amounts
+                             (e.g. ``+$125.00``).  Must be > 0.
     """
 
     def __init__(
@@ -56,11 +59,12 @@ class PositionTool(Pane):
         end_time: TIME | None = None,
         stop_color: str = "rgba(239, 83, 80, 0.25)",
         target_color: str = "rgba(38, 166, 154, 0.25)",
+        quantity: NUM | None = None,
     ):
         super().__init__(series._chart.win)
         self._series = series
 
-        self._validate(entry, stop, target)
+        self._validate(entry, stop, target, quantity=quantity)
 
         chart = series._chart
         entry_ts = chart._single_datetime_format(entry_time)
@@ -75,6 +79,7 @@ class PositionTool(Pane):
                 endTime:         {end_ts},
                 stopColor:       '{stop_color}',
                 targetColor:     '{target_color}',
+                quantity:        {_js_num(quantity)},
             }});
             {series.id}.series.attachPrimitive({self.id});
         null""")
@@ -87,6 +92,7 @@ class PositionTool(Pane):
         stop: NUM | None = None,
         target: NUM | None = None,
         end_time: TIME | None = None,
+        quantity: NUM | None = None,
     ) -> None:
         """
         Update one or more position parameters.
@@ -100,7 +106,10 @@ class PositionTool(Pane):
         :param stop:            New stop-loss price.
         :param target:          New take-profit price.
         :param end_time:        New right-edge timestamp (``None`` skips update).
+        :param quantity:        New position size (must be > 0 if provided).
         """
+        if quantity is not None:
+            self._validate(0, -1, 1, quantity=quantity)  # validate quantity only
         # Build a JS object literal from only the supplied arguments
         parts: list[str] = []
         if entry is not None:
@@ -112,6 +121,8 @@ class PositionTool(Pane):
         if end_time is not None:
             ts = self._series._chart._single_datetime_format(end_time)
             parts.append(f"endTime: {ts}")
+        if quantity is not None:
+            parts.append(f"quantity: {quantity}")
 
         if parts:
             self.run_script(f"{self.id}.applyOptions({{{', '.join(parts)}}})")
@@ -123,7 +134,9 @@ class PositionTool(Pane):
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     @staticmethod
-    def _validate(entry: NUM, stop: NUM, target: NUM) -> None:
+    def _validate(entry: NUM, stop: NUM, target: NUM, quantity: NUM | None = None) -> None:
+        if quantity is not None and quantity <= 0:
+            raise ValueError(f"PositionTool: quantity must be greater than 0 (got {quantity}).")
         if stop == entry:
             raise ValueError("PositionTool: stop price must differ from entry price.")
         if target == entry:

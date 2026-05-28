@@ -236,11 +236,20 @@ Detaches and removes the volume profile.
 
 ## `PositionTool`
 
-````{py:class} PositionTool(series, entry: NUM, stop: NUM, target: NUM, entry_time: TIME, end_time: TIME, stop_color: COLOR, target_color: COLOR)
+````{py:class} PositionTool(series, entry: NUM, stop: NUM, target: NUM, entry_time: TIME, end_time: TIME, stop_color: COLOR, target_color: COLOR, quantity: NUM)
 
 Risk/reward overlay visualising an open trade position. Renders a stop zone
 (red rectangle) and target zone (green rectangle) between the entry price and
 stop/target prices.
+
+Hovering over the overlay reveals an entry price line (blue) with the
+following metrics:
+
+* Entry price and bar count, shown inside the rectangle above the line.
+* Risk/reward ratio (e.g. `1:2`), shown below the line.
+* TP/SL prices anchored at the left inner edge of their respective zones.
+* Win/lose amounts at the right inner edge — monetary (e.g. `+$125.00`) when
+  `quantity` is supplied, or raw point delta otherwise.
 
 **Price-ordering constraints:**
 * Long position: `target > entry > stop`
@@ -251,12 +260,33 @@ stop/target prices.
 * `stop` — stop-loss price.
 * `target` — take-profit price.
 * `entry_time` — timestamp of entry bar.
-* `end_time` — *(optional)* end timestamp; if omitted, the overlay tracks the latest bar.
+* `end_time` — *(optional)* end timestamp; if omitted, the overlay auto-tracks the latest bar (always at least 15 bars wide from entry).
 * `stop_color` / `target_color` — fill colours for each zone.
+* `quantity` — *(optional)* number of units/contracts; enables monetary win/lose display. Must be `> 0`.
+
+Example:
+
+```python
+from lightweight_charts import Chart
+from lightweight_charts.plugins import PositionTool
+import pandas as pd
+
+chart = Chart()
+df = pd.read_csv('ohlcv.csv')
+chart.set(df)
+
+pos = PositionTool(
+    chart.candle_series,
+    entry=100.0, stop=95.0, target=112.0,
+    entry_time=df.iloc[10]['time'],
+    quantity=10,
+)
+chart.show(block=True)
+```
 
 ___
 
-```{py:method} update(entry, stop, target, end_time)
+```{py:method} update(entry, stop, target, end_time, quantity)
 
 Updates one or more position parameters. Only supplied arguments change;
 others retain their current values.

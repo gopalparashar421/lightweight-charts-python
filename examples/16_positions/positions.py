@@ -23,6 +23,7 @@ ENTRY_IDX = 1700  # bar index used as the live entry bar
 ENTRY_PRICE = 2360.00
 STOP_PRICE = 2390.00  # short position: stop above entry
 TARGET_PRICE = 2335.00  # short target below entry  (~1:2 R:R)
+QUANTITY = 10  # contracts — enables monetary win/lose in hover labels
 STREAM_DELAY = 0  # seconds between streamed candles
 
 if __name__ == "__main__":
@@ -52,6 +53,7 @@ if __name__ == "__main__":
                 "target": 2200.00,
                 "entry_time": df.iloc[1600]["time"],
                 "end_time": df.iloc[1650]["time"],  # pinned right edge
+                "quantity": 5,  # 5 contracts; hover shows +$500.00 / -$250.00
             },
             {
                 "entry": 2250.00,
@@ -61,6 +63,7 @@ if __name__ == "__main__":
                 "end_time": df.iloc[1690]["time"],
                 "stop_color": "rgba(239, 83, 80, 0.15)",
                 "target_color": "rgba(38, 166, 154, 0.15)",
+                # No quantity: hover shows raw price distances (+100.00 / -50.00)
             },
         ]
     )
@@ -72,6 +75,7 @@ if __name__ == "__main__":
         stop=STOP_PRICE,
         target=TARGET_PRICE,
         entry_time=entry_time,
+        quantity=QUANTITY,  # enables $-amounts in hover overlay
         # end_time omitted - auto-tracks the latest bar
     )
 
