@@ -242,3 +242,158 @@ body {
 	cursor: pointer;
 	background-color: rgba(50, 50, 50, 0.5);
 }
+.legend-settings-btn {
+	margin-left: 8px;
+	padding: 2px 3px;
+	border-radius: 4px;
+	cursor: pointer;
+	color: rgba(255, 255, 255, 0.45);
+	display: flex;
+	align-items: center;
+	pointer-events: auto;
+}
+.legend-settings-btn:hover {
+	color: #fff;
+	background-color: rgba(50, 50, 50, 0.6);
+}
+.legend-cross-btn {
+	margin-left: 4px;
+	padding: 0 3px;
+	border-radius: 4px;
+	cursor: pointer;
+	color: rgba(255, 255, 255, 0.45);
+	font-size: 11px;
+	line-height: 1;
+	pointer-events: auto;
+}
+.legend-cross-btn:hover {
+	color: #fff;
+	background-color: rgba(180, 50, 50, 0.6);
+}
+/* Settings modal */
+.legend-modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.55);
+	z-index: 10000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.legend-modal {
+	background: #1e222d;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 8px;
+	min-width: 300px;
+	max-width: 440px;
+	width: 100%;
+	max-height: 78vh;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+	overflow: hidden;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	font-size: 12px;
+}
+.legend-modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 14px 10px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	flex-shrink: 0;
+}
+.legend-modal-title {
+	color: #d1d4dc;
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.2px;
+}
+.legend-modal-close {
+	background: none;
+	border: none;
+	color: rgba(255, 255, 255, 0.4);
+	font-size: 14px;
+	cursor: pointer;
+	padding: 2px 6px;
+	border-radius: 4px;
+	line-height: 1;
+}
+.legend-modal-close:hover {
+	color: #fff;
+	background: rgba(255, 255, 255, 0.08);
+}
+.legend-modal-body {
+	overflow-y: auto;
+	padding: 6px 0;
+	flex: 1;
+}
+.legend-modal-body::-webkit-scrollbar {
+	width: 4px;
+}
+.legend-modal-body::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.15);
+	border-radius: 2px;
+}
+.legend-modal-section {
+	padding: 8px 14px;
+}
+.legend-modal-section + .legend-modal-section {
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.legend-modal-section-title {
+	color: rgba(255, 255, 255, 0.3);
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.9px;
+	margin-bottom: 7px;
+}
+.legend-modal-field {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 3px 0;
+	gap: 10px;
+}
+.legend-modal-field-label {
+	color: #b2b5be;
+	font-size: 12px;
+	flex: 1;
+	white-space: nowrap;
+}
+.legend-modal-input {
+	background: rgba(255, 255, 255, 0.07);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 4px;
+	color: #d1d4dc;
+	font-size: 12px;
+	padding: 3px 6px;
+	min-width: 80px;
+	max-width: 130px;
+	outline: none;
+}
+.legend-modal-input:focus {
+	border-color: rgba(255, 255, 255, 0.28);
+}
+.legend-modal-select {
+	cursor: pointer;
+	background: rgba(255, 255, 255, 0.07);
+}
+.legend-modal-color {
+	width: 38px;
+	height: 22px;
+	padding: 1px 2px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 4px;
+	cursor: pointer;
+	background: none;
+	outline: none;
+}
+.legend-modal-checkbox {
+	width: 14px;
+	height: 14px;
+	cursor: pointer;
+	accent-color: #2962ff;
+	flex-shrink: 0;
+}
