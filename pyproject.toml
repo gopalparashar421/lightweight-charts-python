@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-lightweight-charts"
-version = "1.1.0"
+version = "1.2.0"
 description = "A maintained Python wrapper for TradingView's Lightweight Charts v5.x — featuring StreamChart, plugins, multi-pane layouts, and full IChartApi coverage."
 authors = [
     { name = "Gopal Parashar", email = "gopal.parashar421@gmail.com" }

@@ -251,9 +251,9 @@ class PositionToolPaneView implements IPrimitivePaneView {
         // Determine effective end time (pinned or auto-tracked)
         const effectiveEndTime = opts.endTime ?? this._source._autoEndTime;
 
-        // Minimum offset: entry logical + 15 bars
+        // Minimum offset: entry logical + 2 bars
         const entryLogical = timeScale.coordinateToLogical(entryXCoord) ?? (0 as Logical);
-        const minLogical   = (entryLogical + 15) as Logical;
+        const minLogical   = (entryLogical + 2) as Logical;
 
         let endXCoord: Coordinate;
         if (effectiveEndTime !== null) {
