@@ -50,16 +50,20 @@ Detaches and removes the tooltip from the series.
 
 ## `BandsIndicator`
 
-````{py:class} BandsIndicator(upper_series, lower_series, line_color: COLOR, fill_color: COLOR, line_width: int)
+````{py:class} BandsIndicator(chart, upper_data: DataFrame, lower_data: DataFrame, line_color: COLOR, fill_color: COLOR, line_width: int)
 
-Draws band lines and a filled region between an upper and lower series
+Draws band lines and a filled region between an upper and lower data series
 (e.g. Bollinger Bands, Keltner Channels, Donchian Channels).
 
-* `upper_series` — a `SeriesCommon`-derived series representing the upper band.
-* `lower_series` — a `SeriesCommon`-derived series representing the lower band.
-* `line_color` — colour of both band lines.
+Internal `Line` series are created and managed automatically — they are always
+invisible (transparent colour, no price label, no price line, no crosshair marker).
+
+* `chart` — the parent `Chart` (or `StreamChart`) instance.
+* `upper_data` — `DataFrame` with `time` and `value` columns for the upper band.
+* `lower_data` — `DataFrame` with `time` and `value` columns for the lower band.
+* `line_color` — colour of both band lines (default: `'rgba(0,0,0,0)'` — transparent).
 * `fill_color` — fill colour of the region between the bands.
-* `line_width` — line width in pixels.
+* `line_width` — line width in pixels (default: `0`).
 
 Example:
 
@@ -74,15 +78,11 @@ chart.set(df)
 
 mid = df['close'].rolling(20).mean()
 std = df['close'].rolling(20).std()
-upper_df = pd.DataFrame({'time': df['time'], 'Upper': mid + 2 * std})
-lower_df = pd.DataFrame({'time': df['time'], 'Lower': mid - 2 * std})
+upper_df = pd.DataFrame({'time': df['time'], 'value': (mid + 2 * std).values})
+lower_df = pd.DataFrame({'time': df['time'], 'value': (mid - 2 * std).values})
 
-upper = chart.create_line('Upper')
-lower = chart.create_line('Lower')
-upper.set(upper_df)
-lower.set(lower_df)
-
-bands = BandsIndicator(upper, lower)
+bands = BandsIndicator(chart, upper_df, lower_df,
+                       fill_color='rgba(25, 200, 100, 0.15)')
 chart.show(block=True)
 ```
 

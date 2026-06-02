@@ -46,8 +46,9 @@ tooltip.apply_options(line_color='rgba(100, 200, 255, 0.4)', title='AAPL')
 
 ## BandsIndicator
 
-`BandsIndicator` draws a coloured fill between two existing line series — perfect for
-Bollinger Bands, Keltner Channels, or any envelope indicator.
+`BandsIndicator` draws a coloured fill between upper and lower band data — perfect for
+Bollinger Bands, Keltner Channels, or any envelope indicator. Pass DataFrames with
+`time` and `value` columns directly; the plugin manages its own internal series.
 
 ```python
 import pandas as pd
@@ -61,14 +62,10 @@ if __name__ == '__main__':
 
     mid = df['close'].rolling(20).mean()
     std = df['close'].rolling(20).std()
+    upper_df = pd.DataFrame({'time': df['time'], 'value': (mid + 2 * std).values})
+    lower_df = pd.DataFrame({'time': df['time'], 'value': (mid - 2 * std).values})
 
-    upper = chart.create_line('Upper')
-    lower = chart.create_line('Lower')
-    upper.set(pd.DataFrame({'time': df['time'], 'Upper': mid + 2 * std}))
-    lower.set(pd.DataFrame({'time': df['time'], 'Lower': mid - 2 * std}))
-
-    bands = BandsIndicator(upper, lower,
-                           line_color='rgba(50, 200, 100, 0.8)',
+    bands = BandsIndicator(chart, upper_df, lower_df,
                            fill_color='rgba(50, 200, 100, 0.1)')
 
     chart.show(block=True)
