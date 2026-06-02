@@ -28,32 +28,13 @@ if __name__ == "__main__":
     chart = Chart()
     chart.set(df)
 
-    # Create line series to supply upper/lower band data.
-    # Set color to transparent to hide the lines and rely on BandsIndicator for rendering.
-    upper_series = chart.create_line(
-        color="rgba(25, 200, 100, 0)",
-        width=0,
-        price_line=False,
-        price_label=False,
-    )
-    upper_series.set(upper_df)
-
-    lower_series = chart.create_line(
-        color="rgba(25, 200, 100, 0)",
-        width=0,
-        price_line=False,
-        price_label=False,
-    )
-    lower_series.set(lower_df)
-
-    # BandsIndicator draws the fill region between upper_series and lower_series.
+    # BandsIndicator accepts DataFrames directly — no manual Line series needed.
     # Works for Bollinger Bands, Donchian Channels, or any custom envelope.
     bands = BandsIndicator(
-        upper_series,
-        lower_series,
-        line_color="rgba(25, 200, 100, 0)",
+        chart,
+        upper_df,
+        lower_df,
         fill_color="rgba(25, 200, 100, 0.15)",
-        line_width=0,
     )
 
     chart.fit()
