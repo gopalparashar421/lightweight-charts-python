@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import json
+import logging
 import multiprocessing as mp
 
 import webview
@@ -9,6 +10,8 @@ from webview.errors import JavascriptException
 from lightweight_charts import abstract
 
 from .util import FLOAT, parse_event_message
+
+logger = logging.getLogger(__name__)
 
 
 class CallbackAPI:
@@ -92,13 +95,19 @@ class PyWV:
                             window.evaluate_js(arg)
 
                         except webview.errors.JavascriptException as e:
-                            # print(f"Js: {str(arg)}")
-                            print(f"JavaScript Error 1: {e}")  # Debugging output
+                            logger.error("JavaScript error: %s", e)
                 except KeyError as e:
                     return e
                 except JavascriptException as e:
                     msg = json.loads(str(e))
-                    print(msg)
+                    logger.error(
+                        "JavaScript error in script -> '%s': %s[%s:%s] %s",
+                        arg,
+                        msg["name"],
+                        msg["line"],
+                        msg["column"],
+                        msg["message"],
+                    )
                     raise JavascriptException(
                         f"\n\nscript -> '{arg}',\nerror -> {msg['name']}[{msg['line']}:{msg['column']}]\n{msg['message']}"
                     )
