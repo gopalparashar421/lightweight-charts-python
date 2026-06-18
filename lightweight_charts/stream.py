@@ -23,6 +23,7 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from .abstract import AbstractChart
 from .util import BulkRunScript, parse_event_message
@@ -109,9 +110,31 @@ class StreamWindow:
     # Server startup
     # ------------------------------------------------------------------
 
-    def show(self, port: int = 8080, host: str = "127.0.0.1") -> None:
+    def show(
+        self,
+        title: str = "python-lightweight-charts",
+        summary="",
+        description="",
+        port: int = 8080,
+        host: str = "127.0.0.1",
+        debug: bool = False,
+        cors_origins: list[str] | None = None,
+    ) -> None:
         """Build the FastAPI app and start uvicorn in a daemon thread."""
-        app = FastAPI()
+        app = FastAPI(
+            debug=debug,
+            docs_url=None,
+            redoc_url=None,
+            title=title,
+            summary=summary,
+            description=description,
+        )
+        cors_origins = (
+            ["127.0.0.1", "0.0.0.0"].append(cors_origins)
+            if cors_origins
+            else ["127.0.0.1", "0.0.0.0"]
+        )
+        app.add_middleware(CORSMiddleware(app, allow_origins=cors_origins))
 
         # Explicit root route — takes priority over the static-files mount
         @app.get("/")
