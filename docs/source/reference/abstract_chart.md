@@ -415,7 +415,7 @@ ___
 
 ```{py:method} create_subchart(label: str, main_label: str = "Main", toolbox: bool = False) -> SubChart
 
-Creates a tabbed sub-chart inside the same webview window and returns a [`SubChart`](#SubChart) instance.
+Creates a tabbed sub-chart inside the same webview window and returns a {py:class}`SubChart` instance.
 
 On the **first call**, a tab bar is injected above the charts and the main chart is assigned a tab labelled `main_label`. On subsequent calls `main_label` is ignored.
 
@@ -437,7 +437,6 @@ ___
 
 
 
-(SubChart)=
 ````{py:class} SubChart(label: str, toolbox: bool = False)
 
 A tabbed sub-chart that shares the parent chart's webview window. Instances are created via [`create_subchart`](#AbstractChart.create_subchart) and inherit the full [`AbstractChart`](#AbstractChart) API.
