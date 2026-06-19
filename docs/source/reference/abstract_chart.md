@@ -104,18 +104,22 @@ ___
 
 
 
-```{py:method} trend_line(start_time: str | datetime, start_value: NUM, end_time: str | datetime, end_value: NUM, color: COLOR, width: int, style: LINE_STYLE, round: bool) -> Line
+```{py:method} trend_line(start_time: str | datetime, start_value: NUM, end_time: str | datetime, end_value: NUM, color: COLOR, width: int, style: LINE_STYLE, round: bool, text: str, text_position: TREND_LINE_TEXT_POSITION, text_color: COLOR) -> Line
 
 Creates a trend line, drawn from the first point (`start_time`, `start_value`) to the last point (`end_time`, `end_value`).
+
+`text_position` can be `"center"` (default), `"start"`, or `"end"` along the line segment.
 
 ```
 ___
 
 
 
-```{py:method} ray_line(start_time: str | datetime, value: NUM, color: COLOR, width: int, style: LINE_STYLE, round: bool) -> Line
+```{py:method} ray_line(start_time: str | datetime, value: NUM, color: COLOR, width: int, style: LINE_STYLE, round: bool, text: str, text_position: LINE_TEXT_POSITION, axis_label_visible: bool, text_color: COLOR) -> Line
 
 Creates a ray line, drawn from the first point (`start_time`, `value`) and onwards.
+
+Supports the same on-chart `text` / `text_position` options as [`horizontal_line`](#AbstractChart.horizontal_line).
 
 ```
 ___
@@ -185,9 +189,15 @@ ___
 
 
 
-```{py:method} horizontal_line(price: NUM, color: COLOR, width: int, style: LINE_STYLE, text: str, axis_label_visible: bool, func: callable= None) -> HorizontalLine
+```{py:method} horizontal_line(price: NUM, color: COLOR, width: int, style: LINE_STYLE, text: str, text_position: LINE_TEXT_POSITION, axis_label_visible: bool, text_color: COLOR, func: callable= None) -> HorizontalLine
 
 Places a horizontal line at the given price, and returns a [`HorizontalLine`] object.
+
+`text` / `text_position`
+: Optional on-chart label (`"above"` or `"below"`, centred on the visible line span).
+
+`axis_label_visible`
+: When `False`, hides the price label on the right-hand axis.
 
 If a `func` is given, the horizontal line can be edited on the chart. Upon its movement a callback will also be emitted to the callable given, containing the HorizontalLine object. The toolbox should be enabled during its usage. It is designed to be used to update an order (limit, stop, etc.) directly on the chart.
 
@@ -398,6 +408,18 @@ ___
 ```{py:method} get_pane_count() -> int
 
 Returns the current number of panes in the chart (blocking call).
+```
+___
+
+
+
+```{py:method} create_subchart(label: str, main_label: str = "Main", toolbox: bool = False) -> SubChart
+
+Creates a tabbed sub-chart inside the same webview window and returns a [`SubChart`](#SubChart) instance.
+
+On the **first call**, a tab bar is injected above the charts and the main chart is assigned a tab labelled `main_label`. On subsequent calls `main_label` is ignored.
+
+See the [Subcharts example](../examples/subchart.md).
 ```
 ___
 

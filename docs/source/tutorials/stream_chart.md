@@ -56,6 +56,21 @@ chart.show(host='0.0.0.0', port=8080, block=True)
 A security reminder will be printed. Share only the printed URL (with its token) with
 trusted viewers.
 
+## CORS for custom origins
+
+When embedding the chart from another origin (e.g. a local dev server on a different port),
+pass extra allowed origins:
+
+```python
+chart.show(
+    port=8080,
+    cors_origins=["http://192.168.1.10:3000"],
+    block=True,
+)
+```
+
+`http://127.0.0.1` and `http://localhost` are always allowed.
+
 ## Live data streaming
 
 `StreamChart` supports the same `update()` / `update_from_tick()` API as `Chart`:
