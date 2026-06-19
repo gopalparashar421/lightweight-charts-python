@@ -39,23 +39,44 @@ export class BoxPaneRenderer extends TwoPointDrawingPaneRenderer {
             const color = resolveTextColor(this._options.textColor, this._options.lineColor);
             const centerX = mainX + width / 2;
             const centerY = mainY + height / 2;
+            const placement = this._options.textPlacement ?? 'outside';
 
-            switch (this._options.textPosition) {
-                case 'left':
-                    drawShapeText(ctx, mainX + pad, centerY, this._options.text, color, fontSize, 'left', 'middle');
-                    break;
-                case 'right':
-                    drawShapeText(ctx, mainX + width - pad, centerY, this._options.text, color, fontSize, 'right', 'middle');
-                    break;
-                case 'top':
-                    drawShapeText(ctx, centerX, mainY + pad, this._options.text, color, fontSize, 'center', 'top');
-                    break;
-                case 'bottom':
-                    drawShapeText(ctx, centerX, mainY + height - pad, this._options.text, color, fontSize, 'center', 'bottom');
-                    break;
-                default:
-                    drawShapeText(ctx, centerX, centerY, this._options.text, color, fontSize, 'center', 'middle');
-                    break;
+            if (placement === 'outside') {
+                switch (this._options.textPosition) {
+                    case 'left':
+                        drawShapeText(ctx, mainX - pad, centerY, this._options.text, color, fontSize, 'right', 'middle');
+                        break;
+                    case 'right':
+                        drawShapeText(ctx, mainX + width + pad, centerY, this._options.text, color, fontSize, 'left', 'middle');
+                        break;
+                    case 'top':
+                        drawShapeText(ctx, centerX, mainY - pad, this._options.text, color, fontSize, 'center', 'bottom');
+                        break;
+                    case 'bottom':
+                        drawShapeText(ctx, centerX, mainY + height + pad, this._options.text, color, fontSize, 'center', 'top');
+                        break;
+                    default:
+                        drawShapeText(ctx, centerX, mainY - pad, this._options.text, color, fontSize, 'center', 'bottom');
+                        break;
+                }
+            } else {
+                switch (this._options.textPosition) {
+                    case 'left':
+                        drawShapeText(ctx, mainX + pad, centerY, this._options.text, color, fontSize, 'left', 'middle');
+                        break;
+                    case 'right':
+                        drawShapeText(ctx, mainX + width - pad, centerY, this._options.text, color, fontSize, 'right', 'middle');
+                        break;
+                    case 'top':
+                        drawShapeText(ctx, centerX, mainY + pad, this._options.text, color, fontSize, 'center', 'top');
+                        break;
+                    case 'bottom':
+                        drawShapeText(ctx, centerX, mainY + height - pad, this._options.text, color, fontSize, 'center', 'bottom');
+                        break;
+                    default:
+                        drawShapeText(ctx, centerX, centerY, this._options.text, color, fontSize, 'center', 'middle');
+                        break;
+                }
             }
 
             if (!this._hovered) return;

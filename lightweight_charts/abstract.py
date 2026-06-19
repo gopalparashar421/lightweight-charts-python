@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import json
+import numbers
 import os
 from base64 import b64decode
 from datetime import datetime
@@ -22,6 +23,7 @@ from .table import Table
 from .toolbox import ToolBox
 from .topbar import TopBar
 from .util import (
+    BOX_TEXT_PLACEMENT,
     BOX_TEXT_POSITION,
     CROSSHAIR_MODE,
     FLOAT,
@@ -263,8 +265,25 @@ class SeriesCommon(_PaneBase):
     def _series_datetime_format(self, series: pd.Series, exclude_lowercase=None):
         series = series.copy()
         series.index = self._format_labels(series, series.index, series.name, exclude_lowercase)
-        series["time"] = self._single_datetime_format(series["time"])
+        series["time"] = self._format_time(series["time"])
         return series
+
+    def _format_time(self, arg, round: bool = False) -> int:
+        if round:
+            return int(self._single_datetime_format(arg))
+        if isinstance(arg, numbers.Integral) and not isinstance(arg, bool):
+            return int(arg)
+        if isinstance(arg, numbers.Real) and not isinstance(arg, bool):
+            return int(arg)
+        if not pd.api.types.is_datetime64_any_dtype(arg):
+            if pd.api.types.is_numeric_dtype(type(arg)):
+                try:
+                    arg = pd.to_datetime(arg, unit="s")
+                except ValueError:
+                    arg = pd.to_datetime(arg)
+            else:
+                arg = pd.to_datetime(arg)
+        return int(pd.Series([arg]).astype("datetime64[s]").astype("int64").iloc[0])
 
     def _single_datetime_format(self, arg) -> float:
         if isinstance(arg, (str, int, float)) or not pd.api.types.is_datetime64_any_dtype(arg):
@@ -364,9 +383,7 @@ class SeriesCommon(_PaneBase):
         :return: The id of the marker placed.
         """
         try:
-            formatted_time = (
-                self._last_bar["time"] if not time else self._single_datetime_format(time)
-            )
+            formatted_time = self._last_bar["time"] if not time else self._format_time(time)
         except TypeError:
             raise TypeError("Chart marker created before data was set.")
         marker_id = self.win._id_gen.generate()
@@ -514,6 +531,7 @@ class SeriesCommon(_PaneBase):
         style: LINE_STYLE = "solid",
         text: str = "",
         text_position: BOX_TEXT_POSITION = "center",
+        text_placement: BOX_TEXT_PLACEMENT = "outside",
         text_color: str | None = None,
     ) -> TwoPointDrawing:
         return Box(*locals().values())

@@ -104,11 +104,40 @@ ___
 
 
 
-```{py:method} trend_line(start_time: str | datetime, start_value: NUM, end_time: str | datetime, end_value: NUM, color: COLOR, width: int, style: LINE_STYLE, round: bool, text: str, text_position: TREND_LINE_TEXT_POSITION, text_color: COLOR) -> Line
+```{py:method} trend_line(start_time: str | datetime, start_value: NUM, end_time: str | datetime, end_value: NUM, color: COLOR, width: int, style: LINE_STYLE, round: bool, text: str, text_position: TREND_LINE_TEXT_POSITION, text_color: COLOR) -> TwoPointDrawing
 
 Creates a trend line, drawn from the first point (`start_time`, `start_value`) to the last point (`end_time`, `end_value`).
 
+`round`
+: When `False` (default), coordinates use the same Unix-second timestamps as
+[`set`](#AbstractChart.set). Pass times from your `DataFrame` directly, including
+weekly or monthly resampled bars. When `True`, times are snapped to the detected
+bar interval.
+
 `text_position` can be `"center"` (default), `"start"`, or `"end"` along the line segment.
+
+```
+___
+
+
+
+```{py:method} box(start_time: str | datetime, start_value: NUM, end_time: str | datetime, end_value: NUM, color: COLOR, fill_color: COLOR, width: int, style: LINE_STYLE, round: bool, text: str, text_position: BOX_TEXT_POSITION, text_placement: BOX_TEXT_PLACEMENT, text_color: COLOR) -> TwoPointDrawing
+
+Creates a rectangular box between two `(time, price)` corners.
+
+`round`
+: When `False` (default), coordinates use the same Unix-second timestamps as
+[`set`](#AbstractChart.set). Pass times from your `DataFrame` directly, including
+weekly or monthly resampled bars. When `True`, times are snapped to the detected
+bar interval.
+
+`text` / `text_position` / `text_placement` / `text_color`
+: Optional on-chart label.
+
+* `text_position` — anchor: `"center"` (default), `"left"`, `"right"`, `"top"`, or `"bottom"`.
+* `text_placement` — `"outside"` (default) places the label just outside the rectangle on the chosen edge; `"inside"` draws it within the rectangle.
+
+Returns a `TwoPointDrawing` object. Update label and style options at runtime via `.options()`.
 
 ```
 ___

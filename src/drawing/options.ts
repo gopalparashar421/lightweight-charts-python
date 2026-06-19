@@ -1,6 +1,7 @@
 import { LineStyle } from "lightweight-charts";
 
 export type BoxTextPosition = 'center' | 'left' | 'right' | 'top' | 'bottom';
+export type BoxTextPlacement = 'inside' | 'outside';
 export type LineTextPosition = 'above' | 'below';
 export type TrendLineTextPosition = 'center' | 'start' | 'end';
 export type VerticalTextHAlign = 'left' | 'center' | 'right';

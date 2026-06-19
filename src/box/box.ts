@@ -7,16 +7,19 @@ import { InteractionState } from '../drawing/drawing';
 import { DrawingOptions, defaultOptions } from '../drawing/options';
 import { BoxPaneView } from './pane-view';
 import { TwoPointDrawing } from '../drawing/two-point-drawing';
+import { BoxTextPlacement } from '../drawing/options';
 
 
 export interface BoxOptions extends DrawingOptions {
     fillEnabled: boolean;
     fillColor: string;
+    textPlacement: BoxTextPlacement;
 }
 
 const defaultBoxOptions = {
     fillEnabled: true,
     fillColor: 'rgba(255, 255, 255, 0.2)',
+    textPlacement: 'outside' as BoxTextPlacement,
     ...defaultOptions
 }
 

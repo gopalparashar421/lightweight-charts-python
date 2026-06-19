@@ -60,10 +60,27 @@ def test_box_text_options(chart_with_data):
             190,
             text="Zone",
             text_position="left",
+            text_placement="inside",
         ),
     )
     assert "text: `Zone`" in scripts
     assert 'textPosition: "left"' in scripts
+    assert 'textPlacement: "inside"' in scripts
+
+
+def test_box_text_placement_defaults_outside(chart_with_data):
+    chart, bars = chart_with_data
+    scripts = _scripts_after(
+        chart,
+        lambda: chart.box(
+            bars.iloc[-10]["date"],
+            180,
+            bars.iloc[-3]["date"],
+            190,
+            text="Zone",
+        ),
+    )
+    assert 'textPlacement: "outside"' in scripts
 
 
 def test_trend_line_text_options(chart_with_data):

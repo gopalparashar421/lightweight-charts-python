@@ -93,6 +93,7 @@ NUM = float | int
 FLOAT = Literal["left", "right", "top", "bottom"]
 
 BOX_TEXT_POSITION = Literal["center", "left", "right", "top", "bottom"]
+BOX_TEXT_PLACEMENT = Literal["inside", "outside"]
 LINE_TEXT_POSITION = Literal["above", "below"]
 TREND_LINE_TEXT_POSITION = Literal["center", "start", "end"]
 VERTICAL_TEXT_H_ALIGN = Literal["left", "center", "right"]

@@ -3,6 +3,7 @@ import inspect
 import pandas as pd
 
 from .util import (
+    BOX_TEXT_PLACEMENT,
     BOX_TEXT_POSITION,
     LINE_STYLE,
     LINE_TEXT_POSITION,
@@ -17,8 +18,8 @@ from .util import (
 )
 
 
-def make_js_point(chart, time, price):
-    formatted_time = chart._single_datetime_format(time)
+def make_js_point(chart, time, price, round: bool = False):
+    formatted_time = chart._format_time(time, round=round)
     return f"""{{
         "time": {formatted_time},
         "logical": {chart.id}.chart.timeScale()
@@ -35,14 +36,17 @@ def _text_color_js(text_color, line_color):
 
 
 class Drawing(Pane):
-    def __init__(self, chart, func=None):
+    def __init__(self, chart, func=None, round: bool = False):
         super().__init__(chart.win)
         self.chart = chart
+        self._round = round
 
     def update(self, *points):
         formatted_points = []
         for i in range(0, len(points), 2):
-            formatted_points.append(make_js_point(self.chart, points[i], points[i + 1]))
+            formatted_points.append(
+                make_js_point(self.chart, points[i], points[i + 1], round=self._round)
+            )
         self.run_script(f"{self.id}.updatePoints({', '.join(formatted_points)})")
 
     def delete(self):
@@ -72,14 +76,14 @@ class TwoPointDrawing(Drawing):
         options: dict,
         func=None,
     ):
-        super().__init__(chart, func)
+        super().__init__(chart, func, round=round)
 
         options_string = "\n".join(f"{key}: {val}," for key, val in options.items())
 
         self.run_script(f"""
         {self.id} = new Lib.{drawing_type}(
-            {make_js_point(self.chart, start_time, start_value)},
-            {make_js_point(self.chart, end_time, end_value)},
+            {make_js_point(self.chart, start_time, start_value, round=round)},
+            {make_js_point(self.chart, end_time, end_value, round=round)},
             {{
                 {options_string}
             }}
@@ -180,7 +184,7 @@ class VerticalLine(Drawing):
         self.run_script(f"""
 
         {self.id} = new Lib.VerticalLine(
-            {{time: {self.chart._single_datetime_format(time)}}},
+            {{time: {self.chart._format_time(time)}}},
             {{
                 lineColor: '{color}',
                 lineStyle: {as_enum(style, LINE_STYLE)},
@@ -196,7 +200,8 @@ class VerticalLine(Drawing):
         """)
 
     def update(self, time: TIME):
-        self.run_script(f"{self.id}.updatePoints({{time: {time}}})")
+        formatted_time = self.chart._format_time(time)
+        self.run_script(f"{self.id}.updatePoints({{time: {formatted_time}}})")
 
     def options(
         self,
@@ -233,10 +238,11 @@ class RayLine(Drawing):
         text_color: str | None = None,
         func=None,
     ):
-        super().__init__(chart, func)
+        super().__init__(chart, func, round=round)
+        formatted_time = chart._format_time(start_time, round=round)
         self.run_script(f"""
         {self.id} = new Lib.RayLine(
-            {{time: {self.chart._single_datetime_format(start_time)}, price: {value}}},
+            {{time: {formatted_time}, price: {value}}},
             {{
                 lineColor: '{color}',
                 lineStyle: {as_enum(style, LINE_STYLE)},
@@ -285,6 +291,7 @@ class Box(TwoPointDrawing):
         style: LINE_STYLE,
         text: str = "",
         text_position: BOX_TEXT_POSITION = "center",
+        text_placement: BOX_TEXT_PLACEMENT = "outside",
         text_color: str | None = None,
         func=None,
     ):
@@ -304,6 +311,7 @@ class Box(TwoPointDrawing):
                 "text": f"`{text}`",
                 "textColor": f'"{_text_color_js(text_color, line_color)}"',
                 "textPosition": f'"{text_position}"',
+                "textPlacement": f'"{text_placement}"',
             },
             func,
         )
@@ -316,6 +324,7 @@ class Box(TwoPointDrawing):
         fill_color: str | None = None,
         text: str = "",
         text_position: BOX_TEXT_POSITION = "center",
+        text_placement: BOX_TEXT_PLACEMENT = "outside",
         text_color: str | None = None,
     ):
         super().options(color, style, width)
@@ -323,6 +332,7 @@ class Box(TwoPointDrawing):
             f"text: `{text}`",
             f"textColor: '{_text_color_js(text_color, color)}'",
             f"textPosition: '{text_position}'",
+            f"textPlacement: '{text_placement}'",
         ]
         if fill_color is not None:
             opts.append(f'fillColor: "{fill_color}"')

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`create_subchart(label, main_label, toolbox)`** on `AbstractChart` — returns a `SubChart` sharing the parent's webview; a tab bar appears automatically when `create_subchart` is first called. `SubChart` inherits the full `AbstractChart` API (`set`, `create_line`, `create_histogram`, etc.). Closes [#26](https://github.com/gopalparashar421/lightweight-charts-python/issues/26).
 - **Drawing text labels** — `text`, `text_position`, and `text_color` on `box()`, `horizontal_line()`, `ray_line()`, and `trend_line()`; `text_h_align` / `text_v_align` on `vertical_line()`. Labels render on the chart canvas (TradingView-style). All shapes support runtime updates via `options()`.
+- **`box()` text placement** — new `text_placement` argument (`"inside"` | `"outside"`, default `"outside"`) controls whether the label is drawn inside the rectangle or just outside its edge. `text_position` (`"center"`, `"left"`, `"right"`, `"top"`, `"bottom"`) still selects which side or corner to anchor the label.
 - **`SeriesCommon.append_whitespace(count, bar_seconds)`** and **`Candlestick.append_whitespace(...)`** — append future whitespace bars after the last data point so drawings remain visible when resampling to a coarser timeframe.
 - **`StreamChart.show(..., cors_origins=...)`** — optional list of extra allowed CORS origins for browser clients connecting from custom hosts.
 - **`BandsIndicator` DataFrame support** — constructor accepts `upper_data` and `lower_data` as `pd.DataFrame` directly; internal hidden `Line` series are created automatically.
@@ -19,10 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`BandsIndicator` constructor** (**breaking**) — signature is now `BandsIndicator(chart, upper_data: pd.DataFrame, lower_data: pd.DataFrame, ...)`. The old `SeriesCommon` parameter interface is removed. Default `line_color` is `rgba(0,0,0,0)` (transparent) and default `line_width` is `0`.
-- **`Candlestick.update(..., historical_update=False)`** and **`SeriesCommon.update(..., historical_update=False)`** — pass `historical_update=True` to update an existing bar by time instead of appending when future whitespace bars extend past the last real bar. Fixes [#30](https://github.com/gopalparashar421/lightweight-charts-python/issues/30).
+- **`box()` label default** — box text is now drawn outside the rectangle by default (`text_placement="outside"`). Pass `text_placement="inside"` to restore the previous in-rectangle label behaviour.
+- **`Candlestick.update(..., historical_update=False)`** and **`SeriesCommon.update(..., historical_update=False)`** — pass `historical_update=True` to update an existing bar by time instead of appending when future whitespace bars extend past the last real bar.
 - **`SeriesCommon.update` keyword** — renamed `historicalUpdate` to `historical_update` (snake_case).
 
 ### Fixed
+
+- **Box and trend-line drawings on resampled data** — `box()`, `trend_line()`, and related drawing helpers no longer snap coordinates to interval buckets when `round=False` (the default). Drawing times now match the epoch seconds stored by `chart.set()`, fixing collapsed shapes on weekly and monthly charts. Closes [#30](https://github.com/gopalparashar421/lightweight-charts-python/issues/30).
 
 - **`axis_label_visible`** on `horizontal_line()` and `ray_line()` — value is now passed to JavaScript and respected by the price-axis label view.
 - **StreamChart CORS** — correct `CORSMiddleware` registration and origin merging (the prior implementation used `list.append`, which returns `None`).
