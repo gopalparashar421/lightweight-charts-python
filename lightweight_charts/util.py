@@ -92,6 +92,12 @@ NUM = float | int
 
 FLOAT = Literal["left", "right", "top", "bottom"]
 
+BOX_TEXT_POSITION = Literal["center", "left", "right", "top", "bottom"]
+LINE_TEXT_POSITION = Literal["above", "below"]
+TREND_LINE_TEXT_POSITION = Literal["center", "start", "end"]
+VERTICAL_TEXT_H_ALIGN = Literal["left", "center", "right"]
+VERTICAL_TEXT_V_ALIGN = Literal["top", "center", "bottom"]
+
 
 def as_enum(value, string_types):
     types = string_types.__args__

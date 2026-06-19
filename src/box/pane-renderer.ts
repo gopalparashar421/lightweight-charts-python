@@ -3,6 +3,7 @@ import { CanvasRenderingTarget2D } from "fancy-canvas";
 import { TwoPointDrawingPaneRenderer } from "../drawing/pane-renderer";
 import { BoxOptions } from "./box";
 import { setLineStyle } from "../helpers/canvas-rendering";
+import { drawShapeText, resolveTextColor } from "../helpers/text-rendering";
 
 export class BoxPaneRenderer extends TwoPointDrawingPaneRenderer {
     declare _options: BoxOptions;
@@ -32,6 +33,30 @@ export class BoxPaneRenderer extends TwoPointDrawingPaneRenderer {
 
             ctx.strokeRect(mainX, mainY, width, height);
             ctx.fillRect(mainX, mainY, width, height);
+
+            const pad = 6 * scope.horizontalPixelRatio;
+            const fontSize = Math.round(12 * scope.verticalPixelRatio);
+            const color = resolveTextColor(this._options.textColor, this._options.lineColor);
+            const centerX = mainX + width / 2;
+            const centerY = mainY + height / 2;
+
+            switch (this._options.textPosition) {
+                case 'left':
+                    drawShapeText(ctx, mainX + pad, centerY, this._options.text, color, fontSize, 'left', 'middle');
+                    break;
+                case 'right':
+                    drawShapeText(ctx, mainX + width - pad, centerY, this._options.text, color, fontSize, 'right', 'middle');
+                    break;
+                case 'top':
+                    drawShapeText(ctx, centerX, mainY + pad, this._options.text, color, fontSize, 'center', 'top');
+                    break;
+                case 'bottom':
+                    drawShapeText(ctx, centerX, mainY + height - pad, this._options.text, color, fontSize, 'center', 'bottom');
+                    break;
+                default:
+                    drawShapeText(ctx, centerX, centerY, this._options.text, color, fontSize, 'center', 'middle');
+                    break;
+            }
 
             if (!this._hovered) return;
             this._drawEndCircle(scope, mainX, mainY);

@@ -4,6 +4,7 @@ import { CanvasRenderingTarget2D } from "fancy-canvas";
 import { TwoPointDrawingPaneRenderer } from "../drawing/pane-renderer";
 import { DrawingOptions } from "../drawing/options";
 import { setLineStyle } from "../helpers/canvas-rendering";
+import { drawShapeText, resolveTextColor } from "../helpers/text-rendering";
 
 export class TrendLinePaneRenderer extends TwoPointDrawingPaneRenderer {
     constructor(p1: ViewPoint, p2: ViewPoint, options: DrawingOptions, hovered: boolean) {
@@ -31,8 +32,34 @@ export class TrendLinePaneRenderer extends TwoPointDrawingPaneRenderer {
             ctx.moveTo(scaled.x1, scaled.y1);
             ctx.lineTo(scaled.x2, scaled.y2);
             ctx.stroke();
-            // this._drawTextLabel(scope, this._text1, x1Scaled, y1Scaled, true);
-            // this._drawTextLabel(scope, this._text2, x2Scaled, y2Scaled, false);
+
+            const pad = 6 * scope.horizontalPixelRatio;
+            const fontSize = Math.round(12 * scope.verticalPixelRatio);
+            const color = resolveTextColor(this._options.textColor, this._options.lineColor);
+            const dx = scaled.x2 - scaled.x1;
+            const dy = scaled.y2 - scaled.y1;
+            const length = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / length;
+            const ny = dx / length;
+
+            let textX: number;
+            let textY: number;
+            switch (this._options.textPosition) {
+                case 'start':
+                    textX = scaled.x1 + nx * pad;
+                    textY = scaled.y1 + ny * pad;
+                    break;
+                case 'end':
+                    textX = scaled.x2 + nx * pad;
+                    textY = scaled.y2 + ny * pad;
+                    break;
+                default:
+                    textX = (scaled.x1 + scaled.x2) / 2 + nx * pad;
+                    textY = (scaled.y1 + scaled.y2) / 2 + ny * pad;
+                    break;
+            }
+
+            drawShapeText(ctx, textX, textY, this._options.text, color, fontSize, 'center', 'middle');
 
             if (!this._hovered) return;
             this._drawEndCircle(scope, scaled.x1, scaled.y1);

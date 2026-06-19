@@ -3,6 +3,7 @@ import { DrawingOptions } from "../drawing/options";
 import { DrawingPaneRenderer } from "../drawing/pane-renderer";
 import { ViewPoint } from "../drawing/pane-view";
 import { setLineStyle } from "../helpers/canvas-rendering";
+import { drawShapeText, resolveTextColor } from "../helpers/text-rendering";
 
 export class HorizontalLinePaneRenderer extends DrawingPaneRenderer {
     _point: ViewPoint = {x: null, y: null};
@@ -29,6 +30,23 @@ export class HorizontalLinePaneRenderer extends DrawingPaneRenderer {
             ctx.lineTo(scope.bitmapSize.width, scaledY);
 
             ctx.stroke();
+
+            const pad = 6 * scope.verticalPixelRatio;
+            const fontSize = Math.round(12 * scope.verticalPixelRatio);
+            const color = resolveTextColor(this._options.textColor, this._options.lineColor);
+            const textX = (scaledX + scope.bitmapSize.width) / 2;
+            const above = this._options.textPosition !== 'below';
+
+            drawShapeText(
+                ctx,
+                textX,
+                above ? scaledY - pad : scaledY + pad,
+                this._options.text,
+                color,
+                fontSize,
+                'center',
+                above ? 'bottom' : 'top',
+            );
         });
     }
 

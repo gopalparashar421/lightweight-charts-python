@@ -22,16 +22,21 @@ from .table import Table
 from .toolbox import ToolBox
 from .topbar import TopBar
 from .util import (
+    BOX_TEXT_POSITION,
     CROSSHAIR_MODE,
     FLOAT,
     LAST_PRICE_ANIMATION_MODE,
     LINE_STYLE,
+    LINE_TEXT_POSITION,
     LINE_TYPE,
     MARKER_POSITION,
     MARKER_SHAPE,
     NUM,
     PRICE_SCALE_MODE,
     TIME,
+    TREND_LINE_TEXT_POSITION,
+    VERTICAL_TEXT_H_ALIGN,
+    VERTICAL_TEXT_V_ALIGN,
     BulkRunScript,
     Events,
     IDGen,
@@ -81,11 +86,16 @@ class Window:
             while not self.run_script_and_get('document.readyState == "complete"'):
                 continue  # scary, but works
 
-        initial_script = ""
         self.scripts.extend(self.final_scripts)
+        parts: list[str] = []
         for script in self.scripts:
-            initial_script += f"\n{script}"
-        self.script_func(initial_script)
+            stripped = script.strip()
+            if not stripped:
+                continue
+            # Trailing semicolon prevents ASI from merging adjacent scripts
+            # (e.g. `null` + `(function(){...})()` or `''` + `(function(){...})()`).
+            parts.append(stripped if stripped.endswith(";") else f"{stripped};")
+        self.script_func("\n".join(parts))
 
     def run_script(self, script: str, run_last: bool = False):
         """
@@ -280,7 +290,7 @@ class SeriesCommon(_PaneBase):
         self._last_bar = df.iloc[-1]
         self.run_script(f"{self.id}.series.setData({js_data(df)}); ")
 
-    def update(self, series: pd.Series, historicalUpdate: bool = False):
+    def update(self, series: pd.Series, historical_update: bool = False):
         series = self._series_datetime_format(series, exclude_lowercase=self.name)
         if self.name in series.index:
             series.rename({self.name: "value"}, inplace=True)
@@ -288,7 +298,22 @@ class SeriesCommon(_PaneBase):
             self.data.loc[self.data.index[-1]] = self._last_bar
             self.data = pd.concat([self.data, series.to_frame().T], ignore_index=True)
         self._last_bar = series
-        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historicalUpdate)});")
+        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historical_update)});")
+
+    def append_whitespace(self, count: int, bar_seconds: float | None = None) -> int:
+        """Append future whitespace bars after the last point. Returns end time (epoch s)."""
+        if self._last_bar is None:
+            if self.data is None or self.data.empty:
+                return 0
+            start = float(self.data.iloc[-1]["time"])
+        else:
+            start = float(self._last_bar["time"])
+        step = bar_seconds or self._interval
+        end_t = int(start)
+        for i in range(count):
+            end_t = int(start + step * (i + 1))
+            self.run_script(f"{self.id}.series.update({{time:{end_t}}}, false);")
+        return end_t
 
     def _update_markers(self):
         self.run_script(
@@ -439,13 +464,26 @@ class SeriesCommon(_PaneBase):
         width: int = 2,
         style: LINE_STYLE = "solid",
         text: str = "",
+        text_position: LINE_TEXT_POSITION = "above",
         axis_label_visible: bool = True,
+        text_color: str | None = None,
         func: Callable | None = None,
     ) -> "HorizontalLine":
         """
         Creates a horizontal line at the given price.
         """
-        return HorizontalLine(self, price, color, width, style, text, axis_label_visible, func)
+        return HorizontalLine(
+            self,
+            price,
+            color,
+            width,
+            style,
+            text,
+            text_position,
+            axis_label_visible,
+            text_color,
+            func,
+        )
 
     def trend_line(
         self,
@@ -457,6 +495,9 @@ class SeriesCommon(_PaneBase):
         line_color: str = "#1E80F0",
         width: int = 2,
         style: LINE_STYLE = "solid",
+        text: str = "",
+        text_position: TREND_LINE_TEXT_POSITION = "center",
+        text_color: str | None = None,
     ) -> TwoPointDrawing:
         return TrendLine(*locals().values())
 
@@ -471,6 +512,9 @@ class SeriesCommon(_PaneBase):
         fill_color: str = "rgba(255, 255, 255, 0.2)",
         width: int = 2,
         style: LINE_STYLE = "solid",
+        text: str = "",
+        text_position: BOX_TEXT_POSITION = "center",
+        text_color: str | None = None,
     ) -> TwoPointDrawing:
         return Box(*locals().values())
 
@@ -483,8 +527,10 @@ class SeriesCommon(_PaneBase):
         width: int = 2,
         style: LINE_STYLE = "solid",
         text: str = "",
+        text_position: LINE_TEXT_POSITION = "above",
+        axis_label_visible: bool = True,
+        text_color: str | None = None,
     ) -> RayLine:
-        # TODO
         return RayLine(*locals().values())
 
     def vertical_line(
@@ -494,6 +540,9 @@ class SeriesCommon(_PaneBase):
         width: int = 2,
         style: LINE_STYLE = "solid",
         text: str = "",
+        text_h_align: VERTICAL_TEXT_H_ALIGN = "center",
+        text_v_align: VERTICAL_TEXT_V_ALIGN = "center",
+        text_color: str | None = None,
     ) -> VerticalLine:
         return VerticalLine(*locals().values())
 
@@ -846,14 +895,14 @@ class Area(SeriesCommon):
             df = df.rename(columns=self._AREA_COLOR_RENAME)
         super().set(df, format_cols)
 
-    def update(self, series: pd.Series, historicalUpdate: bool = False):
+    def update(self, series: pd.Series, historical_update: bool = False):
         """
         Updates the area series. Accepts optional per-point color keys:
         ``line_color`` / ``lineColor``, ``top_color`` / ``topColor``,
         ``bottom_color`` / ``bottomColor``.
         """
         series = series.rename(self._AREA_COLOR_RENAME)
-        super().update(series, historicalUpdate)
+        super().update(series, historical_update)
 
     def delete(self):
         """
@@ -1139,11 +1188,13 @@ class Candlestick(SeriesCommon):
         else:
             self.run_script(f"{self._chart.id}.toolBox?.clearDrawings()")
 
-    def update(self, series: pd.Series, _from_tick=False):
+    def update(self, series: pd.Series, _from_tick=False, historical_update: bool = False):
         """
         Updates the data from a bar;
         if series['time'] is the same time as the last bar, the last bar will be overwritten.\n
         :param series: labels: date/time, open, high, low, close, volume (if using volume).
+        :param historical_update: When True, update an existing bar by time (required when
+            future whitespace bars extend past the last real bar).
         """
         series = self._series_datetime_format(series) if not _from_tick else series
         if series["time"] != self._last_bar["time"]:
@@ -1152,14 +1203,31 @@ class Candlestick(SeriesCommon):
             self._chart.events.new_bar._emit(self)
 
         self._last_bar = series
-        self.run_script(f"{self.id}.series.update({js_data(series)})")
+        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historical_update)});")
         if "volume" not in series:
             return
         volume = series.drop(["open", "high", "low", "close"]).rename({"volume": "value"})
         volume["color"] = (
             self._volume_up_color if series["close"] > series["open"] else self._volume_down_color
         )
-        self.run_script(f"{self.id}.volumeSeries.update({js_data(volume)})")
+        self.run_script(
+            f"{self.id}.volumeSeries.update({js_data(volume)}, {jbool(historical_update)});"
+        )
+
+    def append_whitespace(self, count: int, bar_seconds: float | None = None) -> int:
+        """Append future whitespace candle bars. Returns end time (epoch s)."""
+        if self._last_bar is None:
+            if self.candle_data is None or self.candle_data.empty:
+                return 0
+            start = float(self.candle_data.iloc[-1]["time"])
+        else:
+            start = float(self._last_bar["time"])
+        step = bar_seconds or self._interval
+        end_t = int(start)
+        for i in range(count):
+            end_t = int(start + step * (i + 1))
+            self.run_script(f"{self.id}.series.update({{time:{end_t}}}, false);")
+        return end_t
 
     def update_from_tick(self, series: pd.Series, cumulative_volume: bool = False):
         """
@@ -1576,7 +1644,7 @@ class AbstractChart(Candlestick, _PaneBase):
         {l_id}.div.style.color = '{color}'
         {l_id}.div.style.fontSize = '{font_size}px'
         {l_id}.div.style.fontFamily = '{font_family}'
-        {l_id}.text.innerText = '{text}'
+        {l_id}.text.innerText = '{text}';
         """
         )
 
@@ -1759,3 +1827,61 @@ class AbstractChart(Candlestick, _PaneBase):
             f"JSON.stringify({self.id}.chart.paneSize({int(pane_index)}))"
         )
         return json.loads(result) if isinstance(result, str) else {}
+
+    def create_subchart(
+        self,
+        label: str,
+        main_label: str = "Main",
+        toolbox: bool = False,
+    ) -> "SubChart":
+        """
+        Creates a sub-chart tab inside the same webview window and returns a
+        ``SubChart`` instance with the full ``AbstractChart`` API.
+
+        On the **first call** a ``SubChartManager`` tab bar is injected above
+        the charts and the main chart is retrospectively assigned a tab labelled
+        *main_label*. On subsequent calls *main_label* is silently ignored (the
+        tab bar and main-chart tab already exist).
+
+        :param label:      Label shown on the new tab.
+        :param main_label: Label for the main chart's tab (first call only).
+        :param toolbox:    Whether to enable the toolbox on this sub-chart.
+        :return:           A ``SubChart`` sharing this chart's webview window.
+        """
+        if not hasattr(self, "_subchart_manager_id"):
+            self._subchart_manager_id = Window._id_gen.generate()
+            self._subcharts: list[SubChart] = []
+            self.run_script(f"{self._subchart_manager_id} = new Lib.SubChartManager()")
+            # Register the main chart as the first (active) tab
+            self.run_script(
+                f"{self._subchart_manager_id}.register('{self.id}', '{main_label}', {self.id})"
+            )
+        sub = SubChart(
+            window=self.win,
+            manager_id=self._subchart_manager_id,
+            label=label,
+            toolbox=toolbox,
+        )
+        self._subcharts.append(sub)
+        return sub
+
+
+class SubChart(AbstractChart):
+    """
+    A sub-chart tab that shares the parent's webview window. Created via
+    ``AbstractChart.create_subchart(label)``.
+
+    The ``SubChartManager`` tab bar is injected by the parent; this class
+    registers its ``Handler`` with the manager after construction so it
+    appears as a new tab.
+    """
+
+    def __init__(
+        self,
+        window: Window,
+        manager_id: str,
+        label: str,
+        toolbox: bool = False,
+    ):
+        super().__init__(window, width=1.0, height=1.0, toolbox=toolbox)
+        self.run_script(f"{manager_id}.register('{self.id}', '{label}', {self.id})")

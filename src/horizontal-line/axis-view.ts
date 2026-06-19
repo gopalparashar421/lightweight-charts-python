@@ -22,7 +22,7 @@ export class HorizontalLineAxisView implements ISeriesPrimitiveAxisView {
     this._price = this._source._point.price.toFixed(precision).toString();
   }
   visible() {
-    return true;
+    return this._source._options.axisLabelVisible ?? true;
   }
   tickVisible() {
     return true;
