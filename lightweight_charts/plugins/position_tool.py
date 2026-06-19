@@ -67,8 +67,8 @@ class PositionTool(Pane):
         self._validate(entry, stop, target, quantity=quantity)
 
         chart = series._chart
-        entry_ts = chart._single_datetime_format(entry_time)
-        end_ts = chart._single_datetime_format(end_time) if end_time is not None else "null"
+        entry_ts = chart._format_time(entry_time)
+        end_ts = chart._format_time(end_time) if end_time is not None else "null"
 
         self.run_script(f"""
             {self.id} = new Lib.PositionTool({{
@@ -119,7 +119,7 @@ class PositionTool(Pane):
         if target is not None:
             parts.append(f"target: {target}")
         if end_time is not None:
-            ts = self._series._chart._single_datetime_format(end_time)
+            ts = self._series._chart._format_time(end_time)
             parts.append(f"endTime: {ts}")
         if quantity is not None:
             parts.append(f"quantity: {quantity}")

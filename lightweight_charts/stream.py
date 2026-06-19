@@ -23,6 +23,7 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from .abstract import AbstractChart
 from .util import BulkRunScript, parse_event_message
@@ -109,9 +110,35 @@ class StreamWindow:
     # Server startup
     # ------------------------------------------------------------------
 
-    def show(self, port: int = 8080, host: str = "127.0.0.1") -> None:
+    def show(
+        self,
+        title: str = "python-lightweight-charts",
+        summary="",
+        description="",
+        port: int = 8080,
+        host: str = "127.0.0.1",
+        debug: bool = False,
+        cors_origins: list[str] | None = None,
+    ) -> None:
         """Build the FastAPI app and start uvicorn in a daemon thread."""
-        app = FastAPI()
+        app = FastAPI(
+            debug=debug,
+            docs_url=None,
+            redoc_url=None,
+            title=title,
+            summary=summary,
+            description=description,
+        )
+        allowed_origins = ["http://127.0.0.1", "http://localhost"]
+        if cors_origins:
+            allowed_origins.extend(cors_origins)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
         # Explicit root route — takes priority over the static-files mount
         @app.get("/")
@@ -244,6 +271,7 @@ class StreamChart(AbstractChart):
         host: str = "127.0.0.1",
         open_browser: bool = False,
         block: bool = True,
+        cors_origins: list[str] | None = None,
     ) -> None:
         """
         Start the chart server and optionally open a browser.
@@ -265,7 +293,7 @@ class StreamChart(AbstractChart):
                 "Ensure the token URL is kept private."
             )
 
-        self.win.show(port=port, host=host)
+        self.win.show(port=port, host=host, cors_origins=cors_origins)
 
         if open_browser:
             webbrowser.open(url)

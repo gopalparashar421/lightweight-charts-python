@@ -29,7 +29,7 @@ class VolumeProfile(Pane):
     ):
         super().__init__(series._chart.win)
         self._series = series
-        ts = series._chart._single_datetime_format(time)
+        ts = series._chart._format_time(time)
         profile_list = (
             profile[["price", "vol"]].to_dict("records")
             if isinstance(profile, pd.DataFrame)

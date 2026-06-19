@@ -23,15 +23,15 @@ seconds automatically.
 ```
 ___
 
-```{py:method} update(series: pd.Series, historicalUpdate: bool)
+```{py:method} update(series: pd.Series, historical_update: bool = False)
 
 Updates the series with a single new data point.
 
 If the timestamp of the new point matches the last bar, the last bar is
 overwritten. Otherwise, a new bar is appended.
 
-When `historicalUpdate` is `True`, the chart viewport is not automatically
-scrolled to the new data.
+When `historical_update` is `True`, the chart updates an existing bar by time
+instead of appending (useful when whitespace bars extend past the last real bar).
 
 ```
 ___
@@ -82,16 +82,60 @@ Creates a horizontal line at `price`.
 ```
 ___
 
-```{py:method} trend_line(start_time, start_value, end_time, end_value, ...) -> TwoPointDrawing
+```{py:method} trend_line(start_time, start_value, end_time, end_value, round: bool = False, color: COLOR, width: int, style: LINE_STYLE, text: str, text_position: TREND_LINE_TEXT_POSITION, text_color: COLOR) -> TwoPointDrawing
 
-Creates a trend line between two price/time coordinates.
+Creates a trend line between two `(time, price)` coordinates.
+
+`round`
+: When `False` (default), coordinates use the same Unix-second timestamps as
+[`set`](#SeriesCommon.set). Pass times from your `DataFrame` directly, including
+weekly or monthly resampled bars. When `True`, times are snapped to the detected
+bar interval.
+
+`text` / `text_position` / `text_color`
+: Optional on-chart label. `text_position` can be `"center"` (default), `"start"`,
+or `"end"` along the line segment.
 
 ```
 ___
 
-```{py:method} box(start_time, start_value, end_time, end_value, ...) -> TwoPointDrawing
+```{py:method} box(start_time, start_value, end_time, end_value, round: bool = False, color: COLOR, fill_color: COLOR, width: int, style: LINE_STYLE, text: str, text_position: BOX_TEXT_POSITION, text_placement: BOX_TEXT_PLACEMENT, text_color: COLOR) -> TwoPointDrawing
 
-Creates a rectangular box drawing.
+Creates a rectangular box between two `(time, price)` corners.
+
+`round`
+: When `False` (default), coordinates use the same Unix-second timestamps as
+[`set`](#SeriesCommon.set). Pass times from your `DataFrame` directly, including
+weekly or monthly resampled bars. When `True`, times are snapped to the detected
+bar interval.
+
+`text` / `text_position` / `text_placement` / `text_color`
+: Optional on-chart label.
+
+* `text_position` — anchor within or relative to the box edge: `"center"` (default),
+  `"left"`, `"right"`, `"top"`, or `"bottom"`.
+* `text_placement` — `"outside"` (default) draws the label just outside the
+  rectangle on the chosen edge; `"inside"` draws it within the rectangle.
+
+Returns a `TwoPointDrawing` object. Update label and style options at runtime via
+`.options()`.
+
+Example:
+
+```python
+weekly = daily.set_index("time").resample("W").agg({
+    "open": "first", "high": "max", "low": "min", "close": "last",
+}).reset_index()
+
+chart.set(weekly)
+chart.box(
+    weekly["time"].iloc[0], weekly["low"].min(),
+    weekly["time"].iloc[8], weekly["high"].max(),
+    text="Support zone",
+    text_position="top",
+    text_placement="outside",
+)
+```
 
 ```
 ___

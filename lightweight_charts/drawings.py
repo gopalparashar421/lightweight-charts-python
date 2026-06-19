@@ -2,11 +2,24 @@ import inspect
 
 import pandas as pd
 
-from .util import LINE_STYLE, NUM, TIME, Pane, as_enum
+from .util import (
+    BOX_TEXT_PLACEMENT,
+    BOX_TEXT_POSITION,
+    LINE_STYLE,
+    LINE_TEXT_POSITION,
+    NUM,
+    TIME,
+    TREND_LINE_TEXT_POSITION,
+    VERTICAL_TEXT_H_ALIGN,
+    VERTICAL_TEXT_V_ALIGN,
+    Pane,
+    as_enum,
+    jbool,
+)
 
 
-def make_js_point(chart, time, price):
-    formatted_time = chart._single_datetime_format(time)
+def make_js_point(chart, time, price, round: bool = False):
+    formatted_time = chart._format_time(time, round=round)
     return f"""{{
         "time": {formatted_time},
         "logical": {chart.id}.chart.timeScale()
@@ -18,15 +31,22 @@ def make_js_point(chart, time, price):
     }}"""
 
 
+def _text_color_js(text_color, line_color):
+    return text_color if text_color is not None else line_color
+
+
 class Drawing(Pane):
-    def __init__(self, chart, func=None):
+    def __init__(self, chart, func=None, round: bool = False):
         super().__init__(chart.win)
         self.chart = chart
+        self._round = round
 
     def update(self, *points):
         formatted_points = []
         for i in range(0, len(points), 2):
-            formatted_points.append(make_js_point(self.chart, points[i], points[i + 1]))
+            formatted_points.append(
+                make_js_point(self.chart, points[i], points[i + 1], round=self._round)
+            )
         self.run_script(f"{self.id}.updatePoints({', '.join(formatted_points)})")
 
     def delete(self):
@@ -56,14 +76,14 @@ class TwoPointDrawing(Drawing):
         options: dict,
         func=None,
     ):
-        super().__init__(chart, func)
+        super().__init__(chart, func, round=round)
 
         options_string = "\n".join(f"{key}: {val}," for key, val in options.items())
 
         self.run_script(f"""
         {self.id} = new Lib.{drawing_type}(
-            {make_js_point(self.chart, start_time, start_value)},
-            {make_js_point(self.chart, end_time, end_value)},
+            {make_js_point(self.chart, start_time, start_value, round=round)},
+            {make_js_point(self.chart, end_time, end_value, round=round)},
             {{
                 {options_string}
             }}
@@ -73,7 +93,19 @@ class TwoPointDrawing(Drawing):
 
 
 class HorizontalLine(Drawing):
-    def __init__(self, chart, price, color, width, style, text, axis_label_visible, func):
+    def __init__(
+        self,
+        chart,
+        price,
+        color,
+        width,
+        style,
+        text,
+        text_position,
+        axis_label_visible,
+        text_color,
+        func,
+    ):
         super().__init__(chart, func)
         self.price = price
         self.run_script(f"""
@@ -85,6 +117,9 @@ class HorizontalLine(Drawing):
                 lineStyle: {as_enum(style, LINE_STYLE)},
                 width: {width},
                 text: `{text}`,
+                textColor: '{_text_color_js(text_color, color)}',
+                textPosition: '{text_position}',
+                axisLabelVisible: {jbool(axis_label_visible)},
             }},
             callbackName={f"'{self.id}'" if func else "null"}
         )
@@ -109,27 +144,55 @@ class HorizontalLine(Drawing):
         Moves the horizontal line to the given price.
         """
         self.run_script(f"{self.id}.updatePoints({{price: {price}}})")
-        # self.run_script(f'{self.id}.updatePrice({price})')
         self.price = price
 
-    def options(self, color="#1E80F0", style="solid", width=4, text=""):
+    def options(
+        self,
+        color="#1E80F0",
+        style="solid",
+        width=4,
+        text="",
+        text_position: LINE_TEXT_POSITION = "above",
+        axis_label_visible: bool = True,
+        text_color: str | None = None,
+    ):
         super().options(color, style, width)
-        self.run_script(f"{self.id}.applyOptions({{text: `{text}`}})")
+        self.run_script(f"""{self.id}.applyOptions({{
+            text: `{text}`,
+            textColor: '{_text_color_js(text_color, color)}',
+            textPosition: '{text_position}',
+            axisLabelVisible: {jbool(axis_label_visible)},
+        }})""")
 
 
 class VerticalLine(Drawing):
-    def __init__(self, chart, time, color, width, style, text, func=None):
+    def __init__(
+        self,
+        chart,
+        time,
+        color,
+        width,
+        style,
+        text,
+        text_h_align,
+        text_v_align,
+        text_color,
+        func=None,
+    ):
         super().__init__(chart, func)
         self.time = time
         self.run_script(f"""
 
         {self.id} = new Lib.VerticalLine(
-            {{time: {self.chart._single_datetime_format(time)}}},
+            {{time: {self.chart._format_time(time)}}},
             {{
                 lineColor: '{color}',
                 lineStyle: {as_enum(style, LINE_STYLE)},
                 width: {width},
                 text: `{text}`,
+                textColor: '{_text_color_js(text_color, color)}',
+                textHAlign: '{text_h_align}',
+                textVAlign: '{text_v_align}',
             }},
             callbackName={f"'{self.id}'" if func else "null"}
         )
@@ -137,13 +200,26 @@ class VerticalLine(Drawing):
         """)
 
     def update(self, time: TIME):
-        self.run_script(f"{self.id}.updatePoints({{time: {time}}})")
-        # self.run_script(f'{self.id}.updatePrice({price})')
-        # self.price = price
+        formatted_time = self.chart._format_time(time)
+        self.run_script(f"{self.id}.updatePoints({{time: {formatted_time}}})")
 
-    def options(self, color="#1E80F0", style="solid", width=4, text=""):
+    def options(
+        self,
+        color="#1E80F0",
+        style="solid",
+        width=4,
+        text="",
+        text_h_align: VERTICAL_TEXT_H_ALIGN = "center",
+        text_v_align: VERTICAL_TEXT_V_ALIGN = "center",
+        text_color: str | None = None,
+    ):
         super().options(color, style, width)
-        self.run_script(f"{self.id}.applyOptions({{text: `{text}`}})")
+        self.run_script(f"""{self.id}.applyOptions({{
+            text: `{text}`,
+            textColor: '{_text_color_js(text_color, color)}',
+            textHAlign: '{text_h_align}',
+            textVAlign: '{text_v_align}',
+        }})""")
 
 
 class RayLine(Drawing):
@@ -157,22 +233,47 @@ class RayLine(Drawing):
         width: int = 2,
         style: LINE_STYLE = "solid",
         text: str = "",
+        text_position: LINE_TEXT_POSITION = "above",
+        axis_label_visible: bool = True,
+        text_color: str | None = None,
         func=None,
     ):
-        super().__init__(chart, func)
+        super().__init__(chart, func, round=round)
+        formatted_time = chart._format_time(start_time, round=round)
         self.run_script(f"""
         {self.id} = new Lib.RayLine(
-            {{time: {self.chart._single_datetime_format(start_time)}, price: {value}}},
+            {{time: {formatted_time}, price: {value}}},
             {{
                 lineColor: '{color}',
                 lineStyle: {as_enum(style, LINE_STYLE)},
                 width: {width},
                 text: `{text}`,
+                textColor: '{_text_color_js(text_color, color)}',
+                textPosition: '{text_position}',
+                axisLabelVisible: {jbool(axis_label_visible)},
             }},
             callbackName={f"'{self.id}'" if func else "null"}
         )
         {chart.id}.series.attachPrimitive({self.id})
         """)
+
+    def options(
+        self,
+        color="#1E80F0",
+        style="solid",
+        width=4,
+        text="",
+        text_position: LINE_TEXT_POSITION = "above",
+        axis_label_visible: bool = True,
+        text_color: str | None = None,
+    ):
+        super().options(color, style, width)
+        self.run_script(f"""{self.id}.applyOptions({{
+            text: `{text}`,
+            textColor: '{_text_color_js(text_color, color)}',
+            textPosition: '{text_position}',
+            axisLabelVisible: {jbool(axis_label_visible)},
+        }})""")
 
 
 class Box(TwoPointDrawing):
@@ -188,9 +289,12 @@ class Box(TwoPointDrawing):
         fill_color: str,
         width: int,
         style: LINE_STYLE,
+        text: str = "",
+        text_position: BOX_TEXT_POSITION = "center",
+        text_placement: BOX_TEXT_PLACEMENT = "outside",
+        text_color: str | None = None,
         func=None,
     ):
-
         super().__init__(
             "Box",
             chart,
@@ -204,9 +308,35 @@ class Box(TwoPointDrawing):
                 "fillColor": f'"{fill_color}"',
                 "width": width,
                 "lineStyle": as_enum(style, LINE_STYLE),
+                "text": f"`{text}`",
+                "textColor": f'"{_text_color_js(text_color, line_color)}"',
+                "textPosition": f'"{text_position}"',
+                "textPlacement": f'"{text_placement}"',
             },
             func,
         )
+
+    def options(
+        self,
+        color="#1E80F0",
+        style="solid",
+        width=4,
+        fill_color: str | None = None,
+        text: str = "",
+        text_position: BOX_TEXT_POSITION = "center",
+        text_placement: BOX_TEXT_PLACEMENT = "outside",
+        text_color: str | None = None,
+    ):
+        super().options(color, style, width)
+        opts = [
+            f"text: `{text}`",
+            f"textColor: '{_text_color_js(text_color, color)}'",
+            f"textPosition: '{text_position}'",
+            f"textPlacement: '{text_placement}'",
+        ]
+        if fill_color is not None:
+            opts.append(f'fillColor: "{fill_color}"')
+        self.run_script(f"{self.id}.applyOptions({{{', '.join(opts)}}})")
 
 
 class TrendLine(TwoPointDrawing):
@@ -221,9 +351,11 @@ class TrendLine(TwoPointDrawing):
         line_color: str,
         width: int,
         style: LINE_STYLE,
+        text: str = "",
+        text_position: TREND_LINE_TEXT_POSITION = "center",
+        text_color: str | None = None,
         func=None,
     ):
-
         super().__init__(
             "TrendLine",
             chart,
@@ -236,9 +368,28 @@ class TrendLine(TwoPointDrawing):
                 "lineColor": f'"{line_color}"',
                 "width": width,
                 "lineStyle": as_enum(style, LINE_STYLE),
+                "text": f"`{text}`",
+                "textColor": f'"{_text_color_js(text_color, line_color)}"',
+                "textPosition": f'"{text_position}"',
             },
             func,
         )
+
+    def options(
+        self,
+        color="#1E80F0",
+        style="solid",
+        width=4,
+        text: str = "",
+        text_position: TREND_LINE_TEXT_POSITION = "center",
+        text_color: str | None = None,
+    ):
+        super().options(color, style, width)
+        self.run_script(f"""{self.id}.applyOptions({{
+            text: `{text}`,
+            textColor: '{_text_color_js(text_color, color)}',
+            textPosition: '{text_position}',
+        }})""")
 
 
 # TODO reimplement/fix

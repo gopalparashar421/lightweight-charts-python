@@ -37,6 +37,13 @@ export function globalParamInit() {
         ...paneStyleDefault,
     }
     window.containerDiv = document.getElementById("container") || document.createElement('div');
+    const container = window.containerDiv;
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.width = "100%";
+    container.style.height = "100%";
+    container.style.minHeight = "0";
+    container.style.overflow = "hidden";
     window.setCursor = (type: string | undefined) => {
         if (type) window.cursor = type;
         document.body.style.cursor = window.cursor;

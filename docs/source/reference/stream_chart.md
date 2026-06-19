@@ -28,7 +28,7 @@ Open the URL in any browser. The token is a one-time secret — keep it private.
 ___
 
 
-```{py:method} show(port: int, host: str, open_browser: bool, block: bool)
+```{py:method} show(port: int, host: str, open_browser: bool, block: bool, cors_origins: list[str])
 
 Starts the FastAPI/Uvicorn server and optionally opens the system browser.
 
@@ -36,6 +36,7 @@ Starts the FastAPI/Uvicorn server and optionally opens the system browser.
 * `host` *(str, default "127.0.0.1")*: Bind address. Use `"0.0.0.0"` for LAN access (a security reminder is printed).
 * `open_browser` *(bool, default False)*: Open the default browser to the chart URL.
 * `block` *(bool, default True)*: Block the calling thread until Ctrl+C is received.
+* `cors_origins` *(list[str], optional)*: Additional allowed CORS origins (e.g. `"http://192.168.1.10:8080"`). `http://127.0.0.1` and `http://localhost` are always permitted.
 
 ```
 

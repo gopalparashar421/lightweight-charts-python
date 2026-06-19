@@ -38,3 +38,27 @@ Throughout the library, colors should be given as either rgb (`rgb(100, 100, 100
 
 ```{py:class} ALIGN(Literal['left', 'right'])
 ```
+
+```{py:class} BOX_TEXT_POSITION(Literal['center', 'left', 'right', 'top', 'bottom'])
+Used by `box()` to select which edge or corner anchors the label.
+```
+
+```{py:class} BOX_TEXT_PLACEMENT(Literal['inside', 'outside'])
+Used by `box()` to draw the label inside the rectangle or just outside it on the chosen edge. Defaults to `'outside'`.
+```
+
+```{py:class} LINE_TEXT_POSITION(Literal['above', 'below'])
+Used by `horizontal_line()` and `ray_line()`.
+```
+
+```{py:class} TREND_LINE_TEXT_POSITION(Literal['center', 'start', 'end'])
+Used by `trend_line()`.
+```
+
+```{py:class} VERTICAL_TEXT_H_ALIGN(Literal['left', 'center', 'right'])
+Used by `vertical_line()`.
+```
+
+```{py:class} VERTICAL_TEXT_V_ALIGN(Literal['top', 'center', 'bottom'])
+Used by `vertical_line()`.
+```

@@ -4,6 +4,7 @@ export * from './handler';
 export * from './global-params';
 export * from './legend';
 export * from './table';
+export * from './tab-bar';
 export * from './toolbox';
 export * from './topbar';
 export * from '../horizontal-line/ray-line';

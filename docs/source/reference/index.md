@@ -20,7 +20,7 @@ typing
 ```
 
 
-1. [`AbstractChart`](abstract_chart.md)
+1. [`AbstractChart`](abstract_chart.md) — includes `SubChart` for tabbed multichart layouts
 2. [`Series`](series.md) — `SeriesCommon`, `Line`, `Area`, `Histogram`, `AttachedPrimitive`, `UpDownMarkers`
 3. [`Histogram`](histogram.md)
 4. [`HorizontalLine`](horizontal_line.md)

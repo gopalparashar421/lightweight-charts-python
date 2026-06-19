@@ -1,4 +1,4 @@
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 from .abstract import (
     AbstractChart,
@@ -8,6 +8,7 @@ from .abstract import (
     Line,
     Pane,
     SeriesCommon,
+    SubChart,
     UpDownMarkers,
     Window,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "SeriesCommon",
     "SessionHighlighting",
     "StreamChart",
+    "SubChart",
     "Tooltip",
     "UpDownMarkers",
     "VolumeProfile",
