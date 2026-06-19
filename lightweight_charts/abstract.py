@@ -271,19 +271,17 @@ class SeriesCommon(_PaneBase):
     def _format_time(self, arg, round: bool = False) -> int:
         if round:
             return int(self._single_datetime_format(arg))
-        if isinstance(arg, numbers.Integral) and not isinstance(arg, bool):
+        if isinstance(arg, bool):
+            pass
+        elif isinstance(arg, numbers.Integral):
             return int(arg)
-        if isinstance(arg, numbers.Real) and not isinstance(arg, bool):
-            return int(arg)
-        if not pd.api.types.is_datetime64_any_dtype(arg):
-            if pd.api.types.is_numeric_dtype(type(arg)):
-                try:
-                    arg = pd.to_datetime(arg, unit="s")
-                except ValueError:
-                    arg = pd.to_datetime(arg)
+        series = pd.Series([arg])
+        if not pd.api.types.is_datetime64_any_dtype(series.dtype):
+            if pd.api.types.is_numeric_dtype(series.dtype):
+                series = pd.to_datetime(series, unit="s")
             else:
-                arg = pd.to_datetime(arg)
-        return int(pd.Series([arg]).astype("datetime64[s]").astype("int64").iloc[0])
+                series = pd.to_datetime(series)
+        return int(series.astype("datetime64[s]").astype("int64").iloc[0])
 
     def _single_datetime_format(self, arg) -> float:
         if isinstance(arg, (str, int, float)) or not pd.api.types.is_datetime64_any_dtype(arg):
