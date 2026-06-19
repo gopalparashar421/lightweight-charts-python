@@ -75,13 +75,22 @@ export class Handler {
 
     this.wrapper = document.createElement("div");
     this.wrapper.classList.add("handler");
-    this.wrapper.style.float = position;
 
     this.div = document.createElement("div");
-    this.div.style.position = "relative";
+    this.div.classList.add("chart-root");
 
     this.wrapper.appendChild(this.div);
     window.containerDiv.append(this.wrapper);
+
+    if (this.scale.width < 1) {
+      this.wrapper.style.width = `${100 * this.scale.width}%`;
+      this.wrapper.style.flex = "0 0 auto";
+      this.wrapper.style.float = position;
+    } else {
+      this.wrapper.style.width = "100%";
+      this.wrapper.style.flex = "1 1 auto";
+      this.wrapper.style.minHeight = "0";
+    }
 
     this.chart = this._createChart();
     this.series = this.createCandlestickSeries(0);
@@ -113,14 +122,25 @@ export class Handler {
   }
 
   reSize() {
-    let topBarOffset =
+    const container = window.containerDiv;
+    const topBarOffset =
       this.scale.height !== 0 ? this._topBar?._div.offsetHeight || 0 : 0;
-    this.chart.resize(
-      window.innerWidth * this.scale.width,
-      window.innerHeight * this.scale.height - topBarOffset
+    const wrapperWidth = Math.max(
+      Math.floor(container.clientWidth * this.scale.width),
+      0,
     );
-    this.wrapper.style.width = `${100 * this.scale.width}%`;
-    this.wrapper.style.height = `${100 * this.scale.height}%`;
+    const wrapperHeight =
+      this.wrapper.clientHeight > 0
+        ? this.wrapper.clientHeight
+        : Math.floor(container.clientHeight * this.scale.height);
+    const chartHeight = Math.max(wrapperHeight - topBarOffset, 0);
+    this.chart.resize(wrapperWidth, chartHeight);
+
+    if (this.scale.width < 1) {
+      this.wrapper.style.width = `${100 * this.scale.width}%`;
+    } else {
+      this.wrapper.style.width = "100%";
+    }
 
     // TODO definitely a better way to do this
     if (this.scale.height === 0 || this.scale.width === 0) {
@@ -137,9 +157,20 @@ export class Handler {
   }
 
   private _createChart() {
+    const container = window.containerDiv;
+    const width = Math.max(
+      Math.floor(container.clientWidth * this.scale.width) ||
+        Math.floor(window.innerWidth * this.scale.width),
+      0,
+    );
+    const height = Math.max(
+      Math.floor(container.clientHeight * this.scale.height) ||
+        Math.floor(window.innerHeight * this.scale.height),
+      0,
+    );
     return createChart(this.div, {
-      width: window.innerWidth * this.scale.width,
-      height: window.innerHeight * this.scale.height,
+      width,
+      height,
       layout: {
         textColor: window.pane.color,
         background: {
