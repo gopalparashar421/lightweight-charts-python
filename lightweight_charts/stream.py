@@ -129,12 +129,16 @@ class StreamWindow:
             summary=summary,
             description=description,
         )
-        cors_origins = (
-            ["127.0.0.1", "0.0.0.0"].append(cors_origins)
-            if cors_origins
-            else ["127.0.0.1", "0.0.0.0"]
+        allowed_origins = ["http://127.0.0.1", "http://localhost"]
+        if cors_origins:
+            allowed_origins.extend(cors_origins)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
         )
-        app.add_middleware(CORSMiddleware(app, allow_origins=cors_origins))
 
         # Explicit root route — takes priority over the static-files mount
         @app.get("/")
@@ -267,6 +271,7 @@ class StreamChart(AbstractChart):
         host: str = "127.0.0.1",
         open_browser: bool = False,
         block: bool = True,
+        cors_origins: list[str] | None = None,
     ) -> None:
         """
         Start the chart server and optionally open a browser.
@@ -288,7 +293,7 @@ class StreamChart(AbstractChart):
                 "Ensure the token URL is kept private."
             )
 
-        self.win.show(port=port, host=host)
+        self.win.show(port=port, host=host, cors_origins=cors_origins)
 
         if open_browser:
             webbrowser.open(url)
