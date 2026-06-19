@@ -30,7 +30,7 @@ class TextWidget(Widget):
     def __init__(self, topbar, initial_text, align, func):
         super().__init__(topbar, value=initial_text, func=func)
 
-        callback_name = f'"{self.id}"' if func else ""
+        callback_name = f'"{self.id}"' if func else "null"
 
         self.run_script(
             f'{self.id} = {topbar.id}.makeTextBoxWidget("{initial_text}", "{align}", {callback_name})'

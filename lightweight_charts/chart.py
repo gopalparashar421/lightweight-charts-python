@@ -13,6 +13,46 @@ from .util import FLOAT, parse_event_message
 
 logger = logging.getLogger(__name__)
 
+_JS_ERROR_PREFIX = "__JS_ERROR__:"
+
+
+def _emit_js_error(emit_queue, script: str, exc: Exception) -> None:
+    """Forward a JS evaluation failure from the webview subprocess to the main process."""
+    payload: dict = {"script": script, "error": str(exc)}
+    try:
+        msg = json.loads(str(exc))
+        if isinstance(msg, dict):
+            payload.update(
+                name=msg.get("name"),
+                line=msg.get("line"),
+                column=msg.get("column"),
+                message=msg.get("message"),
+            )
+    except (json.JSONDecodeError, TypeError):
+        pass
+    emit_queue.put(_JS_ERROR_PREFIX + json.dumps(payload))
+
+
+def _log_js_error(payload: dict) -> None:
+    script = payload.get("script", "")
+    if len(script) > 500:
+        script = script[:500] + "..."
+    if payload.get("name") is not None:
+        logger.error(
+            "JavaScript error in script -> '%s': %s[%s:%s] %s",
+            script,
+            payload.get("name", "?"),
+            payload.get("line", "?"),
+            payload.get("column", "?"),
+            payload.get("message") or payload.get("error", ""),
+        )
+    else:
+        logger.error(
+            "JavaScript error in script -> '%s': %s",
+            script,
+            payload.get("error", ""),
+        )
+
 
 class CallbackAPI:
     def __init__(self, emit_queue):
@@ -95,19 +135,12 @@ class PyWV:
                             window.evaluate_js(arg)
 
                         except webview.errors.JavascriptException as e:
-                            logger.error("JavaScript error: %s", e)
+                            _emit_js_error(self.emit_queue, arg, e)
                 except KeyError as e:
                     return e
                 except JavascriptException as e:
+                    _emit_js_error(self.emit_queue, arg, e)
                     msg = json.loads(str(e))
-                    logger.error(
-                        "JavaScript error in script -> '%s': %s[%s:%s] %s",
-                        arg,
-                        msg["name"],
-                        msg["line"],
-                        msg["column"],
-                        msg["message"],
-                    )
                     raise JavascriptException(
                         f"\n\nscript -> '{arg}',\nerror -> {msg['name']}[{msg['line']}:{msg['column']}]\n{msg['message']}"
                     )
@@ -227,6 +260,7 @@ class Chart(abstract.AbstractChart):
         """
         if not self.win.loaded:
             Chart.WV.start()
+            Chart.WV.show(self._i)
             self.win.on_js_load()
         else:
             Chart.WV.show(self._i)
@@ -249,11 +283,19 @@ class Chart(abstract.AbstractChart):
                     Chart.WV.exit()
                     self.is_alive = False
                     return
-                else:
-                    func, args = parse_event_message(self.win, response)
-                    if func is None:
-                        continue
-                    (await func(*args) if inspect.iscoroutinefunction(func) else func(*args))
+                if isinstance(response, str) and response.startswith(_JS_ERROR_PREFIX):
+                    try:
+                        _log_js_error(json.loads(response[len(_JS_ERROR_PREFIX) :]))
+                    except (json.JSONDecodeError, TypeError):
+                        logger.error(
+                            "JavaScript error (malformed payload): %s",
+                            response[:500],
+                        )
+                    continue
+                func, args = parse_event_message(self.win, response)
+                if func is None:
+                    continue
+                (await func(*args) if inspect.iscoroutinefunction(func) else func(*args))
         except KeyboardInterrupt:
             return
 
