@@ -433,4 +433,17 @@ The pane count is fetched from JS each time this is called. Pane objects become 
 
 See the [Panes example](../examples/subchart.md) for usage.
 ```
+___
+
+
+
+(SubChart)=
+````{py:class} SubChart(label: str, toolbox: bool = False)
+
+A tabbed sub-chart that shares the parent chart's webview window. Instances are created via [`create_subchart`](#AbstractChart.create_subchart) and inherit the full [`AbstractChart`](#AbstractChart) API.
+
+The tab bar is managed by the parent chart; each `SubChart` registers itself as a new tab on construction.
+
+See the [Subcharts example](../examples/subchart.md).
+````
 `````
