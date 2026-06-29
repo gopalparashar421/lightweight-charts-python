@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from .abstract import AbstractChart
+from .abstract import AbstractChart, Window
 from .util import BulkRunScript, parse_event_message
 
 # ---------------------------------------------------------------------------
@@ -36,16 +36,21 @@ RETURN_PREFIX = "_~_~RETURN~_~_"
 _JS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
 
 
-class StreamWindow:
+class StreamWindow(Window):
     """
     Drop-in replacement for abstract.Window that communicates with a browser
     client over WebSocket instead of pywebview.
+
+    Subclasses ``Window`` so ``_id_gen``, ``create_table``, ``style``, and
+    other shared window helpers stay in sync with ``AbstractChart``.
     """
 
     def __init__(self) -> None:
-        self.token: str = secrets.token_hex(32)
-        self.scripts: list = []  # replay buffer — never cleared
+        super().__init__()
+        # Per-instance handlers (``Window.handlers`` is a shared class dict).
         self.handlers: dict = {}
+
+        self.token: str = secrets.token_hex(32)
 
         self._ws: WebSocket | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -54,7 +59,7 @@ class StreamWindow:
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
 
-        # BulkRunScript batches JS calls; script_func is called on __exit__
+        # Route batched JS through this window's WebSocket-aware run_script.
         self.bulk_run = BulkRunScript(self.run_script)
 
     # ------------------------------------------------------------------
