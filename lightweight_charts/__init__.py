@@ -22,7 +22,7 @@ from .plugins import (
     VolumeProfile,
 )
 from .polygon import PolygonChart
-from .stream import StreamChart
+from .stream import StreamChart, wait_until_ready
 from .widgets import JupyterChart
 
 __all__ = [
@@ -46,4 +46,5 @@ __all__ = [
     "UpDownMarkers",
     "VolumeProfile",
     "Window",
+    "wait_until_ready",
 ]

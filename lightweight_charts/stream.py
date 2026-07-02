@@ -9,6 +9,13 @@ Usage::
     chart.set(df)
     chart.show(port=8080, block=True)
 
+    # asyncio: start the server and await until the port is accepting connections
+    await chart.show_async(port=8080)
+
+    # or start manually and await readiness
+    chart.show(port=8080, block=False)
+    await chart.ready()
+
 The printed URL includes a one-time security token; share it only with trusted viewers.
 """
 
@@ -18,6 +25,7 @@ import secrets
 import threading
 import time
 import webbrowser
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -58,9 +66,48 @@ class StreamWindow(Window):
         self._return_value = None
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
+        self._server_ready = threading.Event()
+        self._client_ready = threading.Event()
+        self._host: str | None = None
+        self._port: int | None = None
 
         # Route batched JS through this window's WebSocket-aware run_script.
         self.bulk_run = BulkRunScript(self.run_script)
+
+    @property
+    def url(self) -> str | None:
+        """HTTP URL for this stream window, set after :meth:`show`."""
+        if self._host is None or self._port is None:
+            return None
+        return f"http://{self._host}:{self._port}/"
+
+    @property
+    def server_ready_event(self) -> threading.Event:
+        """Set when the HTTP server is accepting connections on the bound port."""
+        return self._server_ready
+
+    @property
+    def client_ready_event(self) -> threading.Event:
+        """Set when a browser client has authenticated over WebSocket."""
+        return self._client_ready
+
+    def wait_server_ready(self, timeout: float | None = None) -> bool:
+        """Block until the HTTP server is listening, or until *timeout* seconds."""
+        return self._server_ready.wait(timeout=timeout)
+
+    def wait_client_ready(self, timeout: float | None = None) -> bool:
+        """Block until a browser client connects, or until *timeout* seconds."""
+        return self._client_ready.wait(timeout=timeout)
+
+    async def await_server_ready(self) -> None:
+        """Await until the HTTP server is listening on the bound port."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._server_ready.wait)
+
+    async def await_client_ready(self) -> None:
+        """Await until a browser client has authenticated over WebSocket."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._client_ready.wait)
 
     # ------------------------------------------------------------------
     # Public interface (mirrors abstract.Window)
@@ -124,8 +171,23 @@ class StreamWindow(Window):
         host: str = "127.0.0.1",
         debug: bool = False,
         cors_origins: list[str] | None = None,
-    ) -> None:
+        wait_ready: bool = True,
+    ) -> str:
         """Build the FastAPI app and start uvicorn in a daemon thread."""
+        self._host = host
+        self._port = port
+        self._server_ready.clear()
+        self._client_ready.clear()
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            self._server_ready.set()
+            try:
+                yield
+            finally:
+                self._server_ready.clear()
+                self._client_ready.clear()
+
         app = FastAPI(
             debug=debug,
             docs_url=None,
@@ -133,6 +195,7 @@ class StreamWindow(Window):
             title=title,
             summary=summary,
             description=description,
+            lifespan=lifespan,
         )
         allowed_origins = ["http://127.0.0.1", "http://localhost"]
         if cors_origins:
@@ -191,6 +254,7 @@ class StreamWindow(Window):
             # --- replay buffered scripts ---
             for script in list(self.scripts):
                 await websocket.send_text(script)
+            self._client_ready.set()
 
             # --- message loop ---
             try:
@@ -210,6 +274,7 @@ class StreamWindow(Window):
                 pass
             finally:
                 self._ws = None
+                self._client_ready.clear()
 
         # Static files (bundle.js, styles.css, etc.) — mounted AFTER the
         # explicit "/" route so that route takes priority.
@@ -242,6 +307,9 @@ class StreamWindow(Window):
         self._thread = threading.Thread(target=_run, daemon=True)
         self._thread.start()
         loop_ready.wait()  # ensure self._loop is set before returning
+        if wait_ready and not self.wait_server_ready(timeout=30.0):
+            raise TimeoutError(f"Timed out waiting for chart server to start on {host}:{port}")
+        return self.url or f"http://{host}:{port}/"
 
 
 class StreamChart(AbstractChart):
@@ -270,6 +338,37 @@ class StreamChart(AbstractChart):
         # AbstractChart so autosize takes over in the browser.
         super().__init__(self.win, width=1.0, height=1.0, toolbox=toolbox)
 
+    @property
+    def url(self) -> str | None:
+        """HTTP URL for this chart, set after :meth:`show`."""
+        return self.win.url
+
+    @property
+    def server_ready_event(self) -> threading.Event:
+        """Set when the HTTP server is accepting connections on the bound port."""
+        return self.win.server_ready_event
+
+    @property
+    def client_ready_event(self) -> threading.Event:
+        """Set when a browser client has authenticated over WebSocket."""
+        return self.win.client_ready_event
+
+    def wait_ready(self, timeout: float | None = None) -> bool:
+        """Block until the HTTP server is listening on the bound port."""
+        return self.win.wait_server_ready(timeout=timeout)
+
+    def wait_client(self, timeout: float | None = None) -> bool:
+        """Block until a browser client connects over WebSocket."""
+        return self.win.wait_client_ready(timeout=timeout)
+
+    async def ready(self) -> None:
+        """Await until the HTTP server is listening on the bound port."""
+        await self.win.await_server_ready()
+
+    async def client_ready(self) -> None:
+        """Await until a browser client has authenticated over WebSocket."""
+        await self.win.await_client_ready()
+
     def show(
         self,
         port: int = 8080,
@@ -277,7 +376,8 @@ class StreamChart(AbstractChart):
         open_browser: bool = False,
         block: bool = True,
         cors_origins: list[str] | None = None,
-    ) -> None:
+        wait_ready: bool = True,
+    ) -> str:
         """
         Start the chart server and optionally open a browser.
 
@@ -288,8 +388,15 @@ class StreamChart(AbstractChart):
                       security warning below).
         open_browser: Automatically open the URL in the default browser.
         block:        Block until Ctrl-C (suitable for scripts).
+        wait_ready:   Wait until the server is accepting connections before
+                      returning (default True).
         """
-        url = f"http://{host}:{port}/"
+        url = self.win.show(
+            port=port,
+            host=host,
+            cors_origins=cors_origins,
+            wait_ready=wait_ready,
+        )
         print(f"Chart server running at {url} — press Ctrl+C to stop")
 
         if host not in ("127.0.0.1", "::1", "localhost"):
@@ -297,8 +404,6 @@ class StreamChart(AbstractChart):
                 "WARNING: Chart server is accessible from the network. "
                 "Ensure the token URL is kept private."
             )
-
-        self.win.show(port=port, host=host, cors_origins=cors_origins)
 
         if open_browser:
             webbrowser.open(url)
@@ -309,3 +414,62 @@ class StreamChart(AbstractChart):
                     time.sleep(1)
             except KeyboardInterrupt:
                 self.win.stop()
+        return url
+
+    async def show_async(
+        self,
+        port: int = 8080,
+        host: str = "127.0.0.1",
+        open_browser: bool = False,
+        cors_origins: list[str] | None = None,
+    ) -> str:
+        """
+        Start the chart server, await readiness, and run until cancelled.
+
+        Returns the chart URL once the server is accepting connections.
+        Cancel the task or send ``KeyboardInterrupt`` to stop the server.
+        """
+        url = self.show(
+            port=port,
+            host=host,
+            open_browser=open_browser,
+            block=False,
+            cors_origins=cors_origins,
+            wait_ready=False,
+        )
+        await self.ready()
+        try:
+            while True:
+                await asyncio.sleep(0.1)
+        except KeyboardInterrupt:
+            self.win.stop()
+            return url
+        except asyncio.CancelledError:
+            self.win.stop()
+            raise
+
+
+async def wait_until_ready(
+    chart: StreamChart,
+    *,
+    client: bool = False,
+) -> None:
+    """
+    Await until a :class:`StreamChart` server (and optionally a browser client)
+    is ready.
+
+    Parameters
+    ----------
+    chart:    The chart instance returned by :class:`StreamChart`.
+    client:   When ``True``, wait for a browser WebSocket connection instead
+              of only the HTTP server.
+
+    Use :func:`asyncio.timeout` to bound the wait::
+
+        async with asyncio.timeout(5):
+            await wait_until_ready(chart)
+    """
+    if client:
+        await chart.client_ready()
+    else:
+        await chart.ready()
