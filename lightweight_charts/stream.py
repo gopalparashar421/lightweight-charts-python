@@ -172,7 +172,11 @@ class StreamWindow(Window):
         @app.get("/")
         async def serve_stream_html():
             headers = {
-                "Content-Security-Policy": ("default-src 'self'; script-src 'self' 'unsafe-eval'")
+                "Content-Security-Policy": (
+                    "default-src 'self'; "
+                    "connect-src 'self'; "
+                    "script-src 'self' 'unsafe-eval'"
+                )
             }
             return FileResponse(
                 os.path.join(_JS_DIR, "stream.html"),

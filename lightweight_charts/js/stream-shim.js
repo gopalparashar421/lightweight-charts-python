@@ -8,7 +8,8 @@
 
     var ws;
     function connect() {
-        ws = new WebSocket('ws://' + location.host + '/ws');
+        var scheme = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        ws = new WebSocket(scheme + location.host + '/ws');
         ws.onopen = function () { ws.send(token); };
         ws.onmessage = function (e) {
             if (e.data.startsWith(RETURN_PREFIX)) {
