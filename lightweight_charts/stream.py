@@ -174,8 +174,9 @@ class StreamWindow(Window):
             headers = {
                 "Content-Security-Policy": (
                     "default-src 'self'; "
-                    "connect-src 'self'; "
-                    "script-src 'self' 'unsafe-eval'"
+                    "connect-src 'self' ws: wss:; "
+                    "script-src 'self' 'unsafe-eval'; "
+                    "style-src 'self' 'unsafe-inline'"
                 )
             }
             return FileResponse(
