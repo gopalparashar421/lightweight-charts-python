@@ -178,7 +178,6 @@ class SeriesCommon(_PaneBase):
         visible: bool = True,
         lines: bool = True,
         color: str = "rgb(191, 195, 203)",
-        font_size: int = 11,
         font_family: str = "Monaco",
         text: str = "",
         pane_index: int | None = None,
@@ -186,6 +185,7 @@ class SeriesCommon(_PaneBase):
         """
         Configures the legend for the pane this series lives on.
         OHLC and percent are intentionally omitted — use chart.legend() on pane 0 for those.
+        Legend type size is CSS-responsive (no Python font_size).
         """
         pane_idx = (
             pane_index
@@ -200,7 +200,6 @@ class SeriesCommon(_PaneBase):
             percent=False,
             lines=lines,
             color=color,
-            font_size=font_size,
             font_family=font_family,
             text=text,
             pane_index=pane_idx,
@@ -1629,7 +1628,6 @@ class AbstractChart(Candlestick, _PaneBase):
         percent: bool = True,
         lines: bool = True,
         color: str = "rgb(191, 195, 203)",
-        font_size: int = 11,
         font_family: str = "Monaco",
         text: str = "",
         color_based_on_candle: bool = False,
@@ -1638,6 +1636,7 @@ class AbstractChart(Candlestick, _PaneBase):
         """
         Configures the legend of the chart.
         :param pane_index: Which pane's legend to configure (default 0).
+        Legend type size is CSS-responsive (no Python font_size).
         """
         l_id = f"{self.id}.getOrCreateLegend({int(pane_index)})"
         if not visible:
@@ -1658,9 +1657,8 @@ class AbstractChart(Candlestick, _PaneBase):
         {l_id}.linesEnabled = {jbool(lines)}
         {l_id}.colorBasedOnCandle = {jbool(color_based_on_candle)}
         {l_id}.div.style.color = '{color}'
-        {l_id}.div.style.fontSize = '{font_size}px'
         {l_id}.div.style.fontFamily = '{font_family}'
-        {l_id}.text.innerText = '{text}';
+        {l_id}.text.innerText = '{text}'
         """
         )
 
