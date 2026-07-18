@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Responsive chart chrome** — legend, top bar, subchart tabs, and HTML tables scale typography (and table padding) with the embedded window size via shared CSS `clamp()` tokens (`--chrome-font-*`). Designed for roughly 480×320–2560×1440 windows at 1x/2x HiDPI. No new Python sizing knobs.
+
+### Changed
+
+- **`legend(..., font_size=...)` removed** (**breaking**) — both `AbstractChart.legend` and `SeriesCommon.legend` no longer accept `font_size`. Legend type size is owned by CSS; pass content and optional `color` / `font_family` only. `layout(font_size=...)` and `watermark(font_size=...)` are unchanged (canvas/LWC, not chrome).
+- **Top bar and subchart tab overflow** — when widgets/tabs no longer fit at the responsive type-scale floor, the top bar and subchart tab bar scroll horizontally instead of clipping or compressing labels.
+
+### Fixed
+
+- **StreamChart CSP** — Content-Security-Policy now allows WebSocket connections (`connect-src 'self' ws: wss:`) and inline styles (`style-src 'self' 'unsafe-inline'`), so live streaming and chrome styling work under the default CSP header.
+- **StreamChart WebSocket scheme** — the browser shim picks `wss://` on HTTPS pages and `ws://` otherwise, instead of always using `ws://`.
+
+---
+
 ## [1.3.0] — 2026-06-19
 
 ### Added
