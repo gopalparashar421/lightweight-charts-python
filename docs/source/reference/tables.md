@@ -6,6 +6,8 @@ Tables are panes that can be used to gain further functionality from charts. The
 
 The `Table` and `Row` objects act as dictionaries, and can be manipulated as such.
 
+Table font size and header/cell padding scale responsively with the window via CSS (no Python `font_size` parameter). Colors, borders, text alignment, column widths, and sticky header positioning remain instance-driven as before.
+
 `width`/`height`
 : Either given as a percentage (a `float` between 0 and 1) or as an integer representing pixel size.
 

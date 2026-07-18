@@ -181,7 +181,7 @@ if __name__ == '__main__':
     chart.crosshair(mode='normal', vert_color='#FFFFFF', vert_style='dotted',
                     horz_color='#FFFFFF', horz_style='dotted')
 
-    chart.legend(visible=True, font_size=14)
+    chart.legend(visible=True)
 
     chart.set(df)
 
