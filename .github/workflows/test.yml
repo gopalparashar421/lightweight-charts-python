@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     name: test (python-${{ matrix.python-version }})
-    runs-on: ubuntu-22.04
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Install system dependencies for pywebview on Ubuntu 22.04
+      - name: Install system dependencies for pywebview
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
