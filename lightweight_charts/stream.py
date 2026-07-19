@@ -13,6 +13,18 @@ Usage::
     await chart.show_async(port=8080)
 
 The printed URL includes a one-time security token; share it only with trusted viewers.
+
+Reconnect model (v1.4.0+)
+-------------------------
+While a browser is disconnected, per-bar **transient** scripts (``series.setData`` /
+``update``, volume, markers) are **not** buffered. On (re)connect the server replays a
+bounded **structural** script log, then emits a data snapshot regenerated from
+authoritative Python state (``candle_data`` / ``data`` / ``markers``, plus tracked
+whitespace from ``append_whitespace``).
+
+Series/marker/whitespace data is snapshot-backed. Other per-bar mutations (table
+cells, price lines, legend, PositionTool P&L) still append to the structural log —
+a soft size warning fires if that log grows large.
 """
 
 from __future__ import annotations
@@ -41,6 +53,9 @@ RETURN_PREFIX = "_~_~RETURN~_~_"
 
 _JS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
 
+# Soft bound for structural script log (defense-in-depth; M-02).
+_STRUCTURAL_LOG_WARN_THRESHOLD = 2000
+
 
 class StreamWindow(Window):
     """
@@ -49,6 +64,10 @@ class StreamWindow(Window):
 
     Subclasses ``Window`` so ``_id_gen``, ``create_table``, ``style``, and
     other shared window helpers stay in sync with ``AbstractChart``.
+
+    Structural scripts are always retained in ``self.scripts`` for reconnect.
+    Transient (series/marker data) scripts are never buffered — they are either
+    sent live or dropped while disconnected and regenerated via snapshot.
     """
 
     def __init__(self) -> None:
@@ -68,9 +87,31 @@ class StreamWindow(Window):
         self._client_ready = threading.Event()
         self._host: str | None = None
         self._port: int | None = None
+        self._chart: AbstractChart | None = None
+        self._data_lock = threading.RLock()
+        self._structural_log_warned = False
 
         # Route batched JS through this window's WebSocket-aware run_script.
         self.bulk_run = BulkRunScript(self.run_script)
+
+    def data_guard(self):
+        """Real lock serializing live mutations against connect-time snapshot."""
+        return self._data_lock
+
+    def _append_structural(self, script: str) -> None:
+        self.scripts.append(script)
+        if (
+            not self._structural_log_warned
+            and len(self.scripts) >= _STRUCTURAL_LOG_WARN_THRESHOLD
+        ):
+            self._structural_log_warned = True
+            print(
+                f"WARNING: StreamWindow structural script log has "
+                f"{len(self.scripts)} entries (threshold "
+                f"{_STRUCTURAL_LOG_WARN_THRESHOLD}). Only series/marker data is "
+                "snapshot-backed; per-bar table/price-line/legend/PositionTool "
+                "updates still buffer as structural and can grow unbounded."
+            )
 
     @property
     def url(self) -> str | None:
@@ -83,15 +124,25 @@ class StreamWindow(Window):
     # Public interface (mirrors abstract.Window)
     # ------------------------------------------------------------------
 
-    def run_script(self, script: str, run_last: bool = False) -> None:
-        """Send *script* to the connected browser, or buffer it for later."""
+    def run_script(self, script: str, run_last: bool = False, transient: bool = False) -> None:
+        """
+        Send *script* to the connected browser, or buffer structural scripts.
+
+        - Connected: send live; structural scripts also append to the log.
+        - Disconnected + transient: drop (state lives in Python).
+        - Disconnected + structural: append to ``self.scripts``.
+        """
         if self.bulk_run.enabled:
-            self.bulk_run.add_script(script)
+            self.bulk_run.add_script(script, transient=transient)
             return
         if self._ws is not None and self._loop is not None:
             asyncio.run_coroutine_threadsafe(self._ws.send_text(script), self._loop)
+            if not transient:
+                self._append_structural(script)
         else:
-            self.scripts.append(script)
+            if transient:
+                return
+            self._append_structural(script)
 
     def run_script_and_get(self, script: str):
         """
@@ -214,11 +265,20 @@ class StreamWindow(Window):
                 await websocket.close(code=4002)
                 return
 
-            self._ws = websocket
-
-            # --- replay scripts buffered before this client connected ---
+            # H-02 / M-04: keep _ws=None during handshake so live transient
+            # emits are dropped; structural replay + snapshot use ordered
+            # await send_text on this event loop; flip live only after snapshot.
             for script in list(self.scripts):
                 await websocket.send_text(script)
+
+            with self.data_guard():
+                snapshot_scripts: list[str] = []
+                if self._chart is not None:
+                    snapshot_scripts = self._chart.data_snapshot_scripts()
+                for script in snapshot_scripts:
+                    await websocket.send_text(script)
+                self._ws = websocket
+
             self._client_ready.set()
 
             # --- message loop ---
@@ -302,6 +362,7 @@ class StreamChart(AbstractChart):
         # width/height are unused window-geometry params; pass proportions to
         # AbstractChart so autosize takes over in the browser.
         super().__init__(self.win, width=1.0, height=1.0, toolbox=toolbox)
+        self.win._chart = self
 
     @property
     def url(self) -> str | None:
