@@ -8,19 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.4.0] — 2026-07-19
+
 ### Added
 
 - **Responsive chart chrome** — legend, top bar, subchart tabs, and HTML tables scale typography (and table padding) with the embedded window size via shared CSS `clamp()` tokens (`--chrome-font-*`). Designed for roughly 480×320–2560×1440 windows at 1x/2x HiDPI. No new Python sizing knobs.
+- **`StreamChart.show_async(...)`** — asyncio-friendly server start that mirrors `Chart.show_async` (non-blocking `show` under the hood, then runs until cancelled).
+- **`Window.run_script(..., transient=False)`** — additive keyword used by `StreamChart` to classify per-bar data scripts; ignored by the pywebview `Chart` path.
 
 ### Changed
 
 - **`legend(..., font_size=...)` removed** (**breaking**) — both `AbstractChart.legend` and `SeriesCommon.legend` no longer accept `font_size`. Legend type size is owned by CSS; pass content and optional `color` / `font_family` only. `layout(font_size=...)` and `watermark(font_size=...)` are unchanged (canvas/LWC, not chrome).
 - **Top bar and subchart tab overflow** — when widgets/tabs no longer fit at the responsive type-scale floor, the top bar and subchart tab bar scroll horizontally instead of clipping or compressing labels.
+- **`stream-shim.js` reconnect** — after an established session closes, the page `location.reload()`s for a fresh JS context (avoids duplicate `Lib.Handler` construction). Close code `4002` uses a short backoff retry instead of reload; reload attempts are bounded via `sessionStorage`.
 
 ### Fixed
 
+- **StreamChart reconnect flood** — while disconnected, per-bar `series.update` / `setData` / marker scripts are no longer buffered. On (re)connect the server replays a bounded structural script log, then emits a data snapshot from authoritative Python state (`candle_data` / series `data` / markers / tracked whitespace), so reopen-after-hours no longer replays thousands of updates and crash the page.
+- **Candlestick snapshot** — main-series reconnect data is taken from `candle_data` (full OHLC), not the empty inherited `data` frame.
+- **Snapshot/live cutover** — `_ws` is set only after the snapshot is fully sent under the data guard, so bars streamed during handshake are not lost.
+- **`bulk_run` tagging** — transient vs structural tags are preserved through batched flushes; purely transient batches are dropped while disconnected.
 - **StreamChart CSP** — Content-Security-Policy now allows WebSocket connections (`connect-src 'self' ws: wss:`) and inline styles (`style-src 'self' 'unsafe-inline'`), so live streaming and chrome styling work under the default CSP header.
 - **StreamChart WebSocket scheme** — the browser shim picks `wss://` on HTTPS pages and `ws://` otherwise, instead of always using `ws://`.
+- **`StreamWindow` inheritance** — subclasses `Window` so shared helpers (`_id_gen`, tables, style) stay in sync with `AbstractChart`.
+- **Volume profile data helper** — internal data path aligned between Python and the TypeScript plugin.
+
+### Notes
+
+- **Snapshot boundary** — series data, markers, and whitespace from `append_whitespace` are snapshot-backed on reconnect. Other per-bar mutations (table cells, price lines, legend, PositionTool P&L) still buffer as structural and can grow if updated every bar.
 
 ---
 
