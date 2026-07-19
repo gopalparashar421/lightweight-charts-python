@@ -43,9 +43,11 @@ def test_root_csp_allows_same_origin_websocket(running_stream):
     # Existing directives preserved.
     assert "default-src 'self'" in csp
     assert "script-src 'self' 'unsafe-eval'" in csp
-    # Never widen to arbitrary third-party hosts / bare wss:.
-    assert "wss:" not in csp
-
+    # WebSocket schemes allowed for live streaming (see CHANGELOG Unreleased / 1.3.x CSP fix).
+    assert "ws:" in csp and "wss:" in csp
+    # Must not open connect-src to arbitrary third-party hosts.
+    assert "connect-src *" not in csp
+    assert "https:" not in csp.split("connect-src")[1].split(";")[0]
 
 def test_shim_derives_scheme_from_location_protocol(running_stream):
     with urllib.request.urlopen(f"{running_stream}/stream-shim.js", timeout=5) as resp:
