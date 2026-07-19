@@ -24,6 +24,8 @@ export class ClosestTimeIndexFinder<T extends { time: number }> {
 		let low = 0;
 		let high = this.numbers.length - 1;
 
+		if (this.numbers.length === 0) return 0;
+
 		if (target <= this.numbers[0].time) return 0;
 		if (target >= this.numbers[high].time) return high;
 
