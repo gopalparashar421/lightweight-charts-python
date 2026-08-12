@@ -28,7 +28,7 @@ permissions:
 jobs:
   version-check:
     name: version-check
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       should_publish: ${{ steps.check-pypi.outputs.should_publish }}
@@ -100,7 +100,7 @@ jobs:
     name: build
     needs: version-check
     if: needs.version-check.outputs.should_publish == 'true'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -130,7 +130,7 @@ jobs:
     name: publish to ${{ needs.version-check.outputs.repository }}
     needs: [version-check, build]
     if: needs.version-check.outputs.should_publish == 'true'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: ${{ needs.version-check.outputs.repository == 'testpypi' && 'testpypi' || 'release' }}
     permissions:
       id-token: write  # required for OIDC Trusted Publisher

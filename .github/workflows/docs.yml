@@ -21,7 +21,7 @@ permissions:
 jobs:
   build-docs:
     name: build docs
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
