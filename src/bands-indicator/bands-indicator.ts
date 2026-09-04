@@ -31,6 +31,9 @@ class BandsIndicatorPaneRenderer implements IPrimitivePaneRenderer {
 	draw() {}
 	drawBackground(target: CanvasRenderingTarget2D) {
 		const points: BandRendererData[] = this._viewData.data;
+		if (!points.length) {
+			return;
+		}
 		target.useBitmapCoordinateSpace(scope => {
 			const ctx = scope.context;
 			ctx.scale(scope.horizontalPixelRatio, scope.verticalPixelRatio);
@@ -148,27 +151,28 @@ export class BandsIndicator extends PluginBase implements ISeriesPrimitive<Time>
 
 	attached(p: SeriesAttachedParameter<Time>): void {
 		super.attached(p);
-		this._lowerSeries.subscribeDataChanged(this._onLowerDataChanged);
+		this._lowerSeries.subscribeDataChanged(this._onBandDataChanged);
+		this._upperSeries.subscribeDataChanged(this._onBandDataChanged);
 		this.dataUpdated('full');
 	}
 
 	detached(): void {
-		this._lowerSeries.unsubscribeDataChanged(this._onLowerDataChanged);
+		this._lowerSeries.unsubscribeDataChanged(this._onBandDataChanged);
+		this._upperSeries.unsubscribeDataChanged(this._onBandDataChanged);
 		super.detached();
 	}
 
-	private _onLowerDataChanged = (scope: DataChangedScope) => {
+	private _onBandDataChanged = (scope: DataChangedScope) => {
 		this.dataUpdated(scope);
 		this.requestUpdate();
 	};
 
-	dataUpdated(scope: DataChangedScope) {
+	dataUpdated(_scope: DataChangedScope) {
 		this.calculateBands();
-		if (scope === 'full') {
-			this._timeIndices = new ClosestTimeIndexFinder(
-				this._bandsData as unknown as { time: number }[]
-			);
-		}
+		// Always rebuild — snapshot setData can land as 'update' after an empty attach.
+		this._timeIndices = new ClosestTimeIndexFinder(
+			this._bandsData as unknown as { time: number }[]
+		);
 	}
 
 	calculateBands() {
@@ -194,7 +198,10 @@ export class BandsIndicator extends PluginBase implements ISeriesPrimitive<Time>
 		this._upperLower = new UpperLowerInRange(this._bandsData, 4);
 	}
 
-	autoscaleInfo(startTimePoint: Logical, endTimePoint: Logical): AutoscaleInfo {
+	autoscaleInfo(startTimePoint: Logical, endTimePoint: Logical): AutoscaleInfo | null {
+		if (!this._bandsData.length) {
+			return null;
+		}
 		const ts = this.chart.timeScale();
 		const startTime = (ts.coordinateToTime(
 			ts.logicalToCoordinate(startTimePoint) ?? 0

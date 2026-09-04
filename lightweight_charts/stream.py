@@ -9,23 +9,42 @@ Usage::
     chart.set(df)
     chart.show(port=8080, block=True)
 
-The printed URL includes a one-time security token; share it only with trusted viewers.
+    # asyncio
+    await chart.show_async(port=8080)
+
+The logged URL includes a one-time security token; share it only with trusted viewers.
+
+Reconnect model (v1.4.0+)
+-------------------------
+While a browser is disconnected, per-bar **transient** scripts (``series.setData`` /
+``update``, volume, markers) are **not** buffered. On (re)connect the server replays a
+bounded **structural** script log, then emits a data snapshot regenerated from
+authoritative Python state (``candle_data`` / ``data`` / ``markers``, plus tracked
+whitespace from ``append_whitespace``).
+
+Series/marker/whitespace data is snapshot-backed. Other per-bar mutations (table
+cells, price lines, legend, PositionTool P&L) still append to the structural log —
+a soft size warning fires if that log grows large.
 """
 
+from __future__ import annotations
+
 import asyncio
+import logging
 import os
 import secrets
 import threading
 import time
 import webbrowser
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 
-from .abstract import AbstractChart
+from .abstract import AbstractChart, Window
 from .util import BulkRunScript, parse_event_message
 
 # ---------------------------------------------------------------------------
@@ -35,17 +54,34 @@ RETURN_PREFIX = "_~_~RETURN~_~_"
 
 _JS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
 
+# Soft bound for structural script log (defense-in-depth; M-02).
+_STRUCTURAL_LOG_WARN_THRESHOLD = 2000
 
-class StreamWindow:
+# Library-safe logger: no handlers of our own; apps (or logging.basicConfig)
+# decide where records go. NullHandler avoids "No handlers" noise.
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
+
+class StreamWindow(Window):
     """
     Drop-in replacement for abstract.Window that communicates with a browser
     client over WebSocket instead of pywebview.
+
+    Subclasses ``Window`` so ``_id_gen``, ``create_table``, ``style``, and
+    other shared window helpers stay in sync with ``AbstractChart``.
+
+    Structural scripts are always retained in ``self.scripts`` for reconnect.
+    Transient (series/marker data) scripts are never buffered — they are either
+    sent live or dropped while disconnected and regenerated via snapshot.
     """
 
     def __init__(self) -> None:
-        self.token: str = secrets.token_hex(32)
-        self.scripts: list = []  # replay buffer — never cleared
+        super().__init__()
+        # Per-instance handlers (``Window.handlers`` is a shared class dict).
         self.handlers: dict = {}
+
+        self.token: str = secrets.token_hex(32)
 
         self._ws: WebSocket | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -53,23 +89,64 @@ class StreamWindow:
         self._return_value = None
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
+        self._server_ready = threading.Event()
+        self._client_ready = threading.Event()
+        self._host: str | None = None
+        self._port: int | None = None
+        self._chart: AbstractChart | None = None
+        self._data_lock = threading.RLock()
+        self._structural_log_warned = False
 
-        # BulkRunScript batches JS calls; script_func is called on __exit__
+        # Route batched JS through this window's WebSocket-aware run_script.
         self.bulk_run = BulkRunScript(self.run_script)
+
+    def data_guard(self):
+        """Real lock serializing live mutations against connect-time snapshot."""
+        return self._data_lock
+
+    def _append_structural(self, script: str) -> None:
+        self.scripts.append(script)
+        if not self._structural_log_warned and len(self.scripts) >= _STRUCTURAL_LOG_WARN_THRESHOLD:
+            self._structural_log_warned = True
+            logger.warning(
+                "StreamWindow structural script log has %d entries (threshold %d). "
+                "Only series/marker data is snapshot-backed; per-bar "
+                "table/price-line/legend/PositionTool updates still buffer as "
+                "structural and can grow unbounded.",
+                len(self.scripts),
+                _STRUCTURAL_LOG_WARN_THRESHOLD,
+            )
+
+    @property
+    def url(self) -> str | None:
+        """HTTP URL for this stream window, set after :meth:`show`."""
+        if self._host is None or self._port is None:
+            return None
+        return f"http://{self._host}:{self._port}/"
 
     # ------------------------------------------------------------------
     # Public interface (mirrors abstract.Window)
     # ------------------------------------------------------------------
 
-    def run_script(self, script: str, run_last: bool = False) -> None:
-        """Send *script* to the connected browser, or buffer it for later."""
+    def run_script(self, script: str, run_last: bool = False, transient: bool = False) -> None:
+        """
+        Send *script* to the connected browser, or buffer structural scripts.
+
+        - Connected: send live; structural scripts also append to the log.
+        - Disconnected + transient: drop (state lives in Python).
+        - Disconnected + structural: append to ``self.scripts``.
+        """
         if self.bulk_run.enabled:
-            self.bulk_run.add_script(script)
+            self.bulk_run.add_script(script, transient=transient)
             return
         if self._ws is not None and self._loop is not None:
             asyncio.run_coroutine_threadsafe(self._ws.send_text(script), self._loop)
+            if not transient:
+                self._append_structural(script)
         else:
-            self.scripts.append(script)
+            if transient:
+                return
+            self._append_structural(script)
 
     def run_script_and_get(self, script: str):
         """
@@ -84,15 +161,6 @@ class StreamWindow:
                 f"Timed out waiting for return value from browser (script: {script!r})"
             )
         return self._return_value
-
-    def on_js_load(self, script: str) -> None:
-        """
-        Buffer *script* permanently (for replay on reconnect) and send it
-        immediately if a client is already connected.
-        """
-        self.scripts.append(script)
-        if self._ws is not None and self._loop is not None:
-            asyncio.run_coroutine_threadsafe(self._ws.send_text(script), self._loop)
 
     def bulk_run_scripts(self, scripts) -> None:
         """Send each script in *scripts*."""
@@ -119,8 +187,29 @@ class StreamWindow:
         host: str = "127.0.0.1",
         debug: bool = False,
         cors_origins: list[str] | None = None,
-    ) -> None:
-        """Build the FastAPI app and start uvicorn in a daemon thread."""
+        log_level: str = "error",
+    ) -> str:
+        """Build the FastAPI app and start uvicorn in a daemon thread.
+
+        ``log_level`` is passed to uvicorn (default ``"error"`` keeps the
+        server quiet). Use ``"info"`` to surface startup and access logs via
+        the host app's logging handlers. ``log_config=None`` so uvicorn does
+        not call ``dictConfig`` and wipe existing handlers.
+        """
+        self._host = host
+        self._port = port
+        self._server_ready.clear()
+        self._client_ready.clear()
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            self._server_ready.set()
+            try:
+                yield
+            finally:
+                self._server_ready.clear()
+                self._client_ready.clear()
+
         app = FastAPI(
             debug=debug,
             docs_url=None,
@@ -128,6 +217,7 @@ class StreamWindow:
             title=title,
             summary=summary,
             description=description,
+            lifespan=lifespan,
         )
         allowed_origins = ["http://127.0.0.1", "http://localhost"]
         if cors_origins:
@@ -144,7 +234,12 @@ class StreamWindow:
         @app.get("/")
         async def serve_stream_html():
             headers = {
-                "Content-Security-Policy": ("default-src 'self'; script-src 'self' 'unsafe-eval'")
+                "Content-Security-Policy": (
+                    "default-src 'self'; "
+                    "connect-src 'self' ws: wss:; "
+                    "script-src 'self' 'unsafe-eval'; "
+                    "style-src 'self' 'unsafe-inline'"
+                )
             }
             return FileResponse(
                 os.path.join(_JS_DIR, "stream.html"),
@@ -177,15 +272,25 @@ class StreamWindow:
 
             # --- single-client guard ---
             if self._ws is not None:
-                print("WARNING: A second client attempted to connect; rejected with code 4002.")
+                logger.warning("A second client attempted to connect; rejected with code 4002.")
                 await websocket.close(code=4002)
                 return
 
-            self._ws = websocket
-
-            # --- replay buffered scripts ---
+            # H-02 / M-04: keep _ws=None during handshake so live transient
+            # emits are dropped; structural replay + snapshot use ordered
+            # await send_text on this event loop; flip live only after snapshot.
             for script in list(self.scripts):
                 await websocket.send_text(script)
+
+            with self.data_guard():
+                snapshot_scripts: list[str] = []
+                if self._chart is not None:
+                    snapshot_scripts = self._chart.data_snapshot_scripts()
+                for script in snapshot_scripts:
+                    await websocket.send_text(script)
+                self._ws = websocket
+
+            self._client_ready.set()
 
             # --- message loop ---
             try:
@@ -205,12 +310,19 @@ class StreamWindow:
                 pass
             finally:
                 self._ws = None
+                self._client_ready.clear()
 
         # Static files (bundle.js, styles.css, etc.) — mounted AFTER the
         # explicit "/" route so that route takes priority.
         app.mount("/", StaticFiles(directory=_JS_DIR), name="static")
 
-        config = uvicorn.Config(app, host=host, port=port, log_level="error")
+        config = uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level=log_level,
+            log_config=None,
+        )
         self._server = uvicorn.Server(config)
 
         loop_ready = threading.Event()
@@ -227,9 +339,10 @@ class StreamWindow:
                     98,
                     10048,
                 ):
-                    print(
-                        f"ERROR: Port {port} is already in use. "
-                        "Choose a different port with chart.show(port=<n>)."
+                    logger.error(
+                        "Port %d is already in use. "
+                        "Choose a different port with chart.show(port=<n>).",
+                        port,
                     )
                 else:
                     raise
@@ -237,13 +350,19 @@ class StreamWindow:
         self._thread = threading.Thread(target=_run, daemon=True)
         self._thread.start()
         loop_ready.wait()  # ensure self._loop is set before returning
+        if not self._server_ready.wait(timeout=30.0):
+            raise TimeoutError(f"Timed out waiting for chart server to start on {host}:{port}")
+        return self.url or f"http://{host}:{port}/"
 
 
 class StreamChart(AbstractChart):
     """
-    A chart served over HTTP/WebSocket.  Open the printed URL in any browser.
+    A chart served over HTTP/WebSocket.  Open the logged URL in any browser.
 
     ::
+
+        import logging
+        logging.basicConfig(level=logging.INFO)
 
         chart = StreamChart()
         chart.set(df)
@@ -264,6 +383,12 @@ class StreamChart(AbstractChart):
         # width/height are unused window-geometry params; pass proportions to
         # AbstractChart so autosize takes over in the browser.
         super().__init__(self.win, width=1.0, height=1.0, toolbox=toolbox)
+        self.win._chart = self
+
+    @property
+    def url(self) -> str | None:
+        """HTTP URL for this chart, set after :meth:`show`."""
+        return self.win.url
 
     def show(
         self,
@@ -272,7 +397,9 @@ class StreamChart(AbstractChart):
         open_browser: bool = False,
         block: bool = True,
         cors_origins: list[str] | None = None,
-    ) -> None:
+        debug: bool = False,
+        log_level: str = "error",
+    ) -> str:
         """
         Start the chart server and optionally open a browser.
 
@@ -283,17 +410,24 @@ class StreamChart(AbstractChart):
                       security warning below).
         open_browser: Automatically open the URL in the default browser.
         block:        Block until Ctrl-C (suitable for scripts).
+        cors_origins: Extra allowed CORS origins.
+        debug:        Enable FastAPI debug mode.
+        log_level:    Uvicorn log level (default ``"error"``). Pass ``"info"``
+                      to include startup/access logs in the host logging config.
         """
-        url = f"http://{host}:{port}/"
-        print(f"Chart server running at {url} — press Ctrl+C to stop")
+        url = self.win.show(
+            port=port,
+            host=host,
+            cors_origins=cors_origins,
+            debug=debug,
+            log_level=log_level,
+        )
+        logger.info("Chart server running at %s — press Ctrl+C to stop", url)
 
         if host not in ("127.0.0.1", "::1", "localhost"):
-            print(
-                "WARNING: Chart server is accessible from the network. "
-                "Ensure the token URL is kept private."
+            logger.warning(
+                "Chart server is accessible from the network. Ensure the token URL is kept private."
             )
-
-        self.win.show(port=port, host=host, cors_origins=cors_origins)
 
         if open_browser:
             webbrowser.open(url)
@@ -304,3 +438,43 @@ class StreamChart(AbstractChart):
                     time.sleep(1)
             except KeyboardInterrupt:
                 self.win.stop()
+        return url
+
+    async def show_async(
+        self,
+        port: int = 8080,
+        host: str = "127.0.0.1",
+        open_browser: bool = False,
+        cors_origins: list[str] | None = None,
+        debug: bool = False,
+        log_level: str = "error",
+    ) -> str:
+        """
+        Start the chart server, await readiness, and run until cancelled.
+
+        Returns the chart URL once the server is accepting connections.
+        Cancel the task or send ``KeyboardInterrupt`` to stop the server.
+
+        Server startup (``show``) blocks the calling thread until the port is
+        ready, so it runs in a worker thread via ``asyncio.to_thread`` to keep
+        the caller's event loop free.
+        """
+        url = await asyncio.to_thread(
+            self.show,
+            port,
+            host,
+            open_browser,
+            False,  # block
+            cors_origins,
+            debug,
+            log_level,
+        )
+        try:
+            while True:
+                await asyncio.sleep(0.1)
+        except KeyboardInterrupt:
+            self.win.stop()
+            return url
+        except asyncio.CancelledError:
+            self.win.stop()
+            raise

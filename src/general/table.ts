@@ -26,6 +26,7 @@ export class Table {
     constructor(width: number, height: number, headings: string[], widths: number[], alignments: string[], position: string, draggable = false,
                 tableBackgroundColor: string, borderColor: string, borderWidth: number, textColors: string[], backgroundColors: string[]) {
         this._div = document.createElement('div')
+        this._div.classList.add('lw-table')
         this.callbackName = null
         this.borderColor = borderColor
         this.borderWidth = borderWidth
@@ -46,16 +47,9 @@ export class Table {
         this.reSize(width, height)
         this._div.style.display = 'flex'
         this._div.style.flexDirection = 'column'
-        // this._div.style.justifyContent = 'space-between'
-
-        this._div.style.borderRadius = '5px'
-        this._div.style.color = 'white'
-        this._div.style.fontSize = '12px'
-        this._div.style.fontVariantNumeric = 'tabular-nums'
+        // typography (font-size, padding, letter-spacing, font-weight) via .lw-table CSS
 
         this.table = document.createElement('table')
-        this.table.style.width = '100%'
-        this.table.style.borderCollapse = 'collapse'
         this._div.style.overflow = 'hidden';
 
         this.headings = headings
@@ -69,9 +63,6 @@ export class Table {
             let th = document.createElement('th')
             th.textContent = this.headings[i]
             th.style.width = this.widths[i]
-            th.style.letterSpacing = '0.03rem'
-            th.style.padding = '0.2rem 0px'
-            th.style.fontWeight = '500'
             th.style.textAlign = 'center'
             if (i !== 0) th.style.borderLeft = borderWidth+'px solid '+borderColor
             th.style.position = 'sticky'
@@ -169,18 +160,14 @@ export class Table {
 
     makeSection(id: string, type: string, numBoxes: number, func=false) {
         let section = document.createElement('div')
-        section.style.display = 'flex'
-        section.style.width = '100%'
-        section.style.padding = '3px 0px'
-        section.style.backgroundColor = 'rgb(30, 30, 30)'
+        section.classList.add('lw-table-section')
         type === 'footer' ? this._div.appendChild(section) : this._div.prepend(section)
 
         const textBoxes = []
         for (let i = 0; i < numBoxes; i++) {
             let textBox = document.createElement('div')
             section.appendChild(textBox)
-            textBox.style.flex = '1'
-            textBox.style.textAlign = 'center'
+            textBox.classList.add('lw-table-section-cell')
             if (func) {
                 this.divToButton(textBox, `${id}_~_${i}`)
                 textBox.style.borderRadius = '2px'

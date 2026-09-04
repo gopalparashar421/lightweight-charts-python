@@ -191,10 +191,11 @@ Shows a previously hidden series.
 ```
 ___
 
-```{py:method} legend(visible, lines, color, font_size, font_family, text, pane_index)
+```{py:method} legend(visible, lines, color, font_family, text, pane_index)
 
 Configures the legend for the pane this series lives on.
 
+Legend type size is CSS-responsive. There is no Python `font_size` parameter.
 ```
 ___
 

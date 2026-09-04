@@ -4,6 +4,7 @@ import json
 import numbers
 import os
 from base64 import b64decode
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Literal
 from collections.abc import Callable
@@ -99,16 +100,29 @@ class Window:
             parts.append(stripped if stripped.endswith(";") else f"{stripped};")
         self.script_func("\n".join(parts))
 
-    def run_script(self, script: str, run_last: bool = False):
+    def data_guard(self):
+        """
+        Context manager serializing data mutations against snapshot reads.
+
+        Base Window is a no-op (``nullcontext``). ``StreamWindow`` overrides
+        with a real lock. Must never wrap blocking round-trips such as
+        ``run_script_and_get``.
+        """
+        return nullcontext()
+
+    def run_script(self, script: str, run_last: bool = False, transient: bool = False):
         """
         For advanced users; evaluates JavaScript within the Webview.
+
+        ``transient`` is accepted for API compatibility with ``StreamWindow``
+        and ignored here (pywebview always evaluates / buffers every script).
         """
 
         if self.script_func is None:
             raise AttributeError("script_func has not been set")
         if self.loaded:
             if self.bulk_run.enabled:
-                self.bulk_run.add_script(script)
+                self.bulk_run.add_script(script, transient=transient)
             else:
                 self.script_func(script)
         elif run_last:
@@ -170,6 +184,8 @@ class SeriesCommon(_PaneBase):
         self.positions = {}
         self.pane_index = pane_index
         self._data_changed_handler_id: str | None = None
+        self._whitespace_end: int | None = None
+        self._whitespace_step: float | None = None
         if hasattr(chart, "_series_registry"):
             chart._series_registry.append(self)
 
@@ -178,7 +194,6 @@ class SeriesCommon(_PaneBase):
         visible: bool = True,
         lines: bool = True,
         color: str = "rgb(191, 195, 203)",
-        font_size: int = 11,
         font_family: str = "Monaco",
         text: str = "",
         pane_index: int | None = None,
@@ -186,6 +201,7 @@ class SeriesCommon(_PaneBase):
         """
         Configures the legend for the pane this series lives on.
         OHLC and percent are intentionally omitted — use chart.legend() on pane 0 for those.
+        Legend type size is CSS-responsive (no Python font_size).
         """
         pane_idx = (
             pane_index
@@ -200,7 +216,6 @@ class SeriesCommon(_PaneBase):
             percent=False,
             lines=lines,
             color=color,
-            font_size=font_size,
             font_family=font_family,
             text=text,
             pane_index=pane_idx,
@@ -293,29 +308,34 @@ class SeriesCommon(_PaneBase):
         return arg
 
     def set(self, df: pd.DataFrame | None = None, format_cols: bool = True):
-        if df is None or df.empty:
-            self.run_script(f"{self.id}.series.setData([])")
-            self.data = pd.DataFrame()
-            return
-        if format_cols:
-            df = self._df_datetime_format(df, exclude_lowercase=self.name)
-        if self.name:
-            if self.name not in df:
-                raise NameError(f'No column named "{self.name}".')
-            df = df.rename(columns={self.name: "value"})
-        self.data = df.copy()
-        self._last_bar = df.iloc[-1]
-        self.run_script(f"{self.id}.series.setData({js_data(df)}); ")
+        with self.win.data_guard():
+            if df is None or df.empty:
+                self.run_script(f"{self.id}.series.setData([])", transient=True)
+                self.data = pd.DataFrame()
+                return
+            if format_cols:
+                df = self._df_datetime_format(df, exclude_lowercase=self.name)
+            if self.name:
+                if self.name not in df:
+                    raise NameError(f'No column named "{self.name}".')
+                df = df.rename(columns={self.name: "value"})
+            self.data = df.copy()
+            self._last_bar = df.iloc[-1]
+            self.run_script(f"{self.id}.series.setData({js_data(df)}); ", transient=True)
 
     def update(self, series: pd.Series, historical_update: bool = False):
-        series = self._series_datetime_format(series, exclude_lowercase=self.name)
-        if self.name in series.index:
-            series.rename({self.name: "value"}, inplace=True)
-        if self._last_bar is not None and series["time"] != self._last_bar["time"]:
-            self.data.loc[self.data.index[-1]] = self._last_bar
-            self.data = pd.concat([self.data, series.to_frame().T], ignore_index=True)
-        self._last_bar = series
-        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historical_update)});")
+        with self.win.data_guard():
+            series = self._series_datetime_format(series, exclude_lowercase=self.name)
+            if self.name in series.index:
+                series.rename({self.name: "value"}, inplace=True)
+            if self._last_bar is not None and series["time"] != self._last_bar["time"]:
+                self.data.loc[self.data.index[-1]] = self._last_bar
+                self.data = pd.concat([self.data, series.to_frame().T], ignore_index=True)
+            self._last_bar = series
+            self.run_script(
+                f"{self.id}.series.update({js_data(series)}, {jbool(historical_update)});",
+                transient=True,
+            )
 
     def append_whitespace(self, count: int, bar_seconds: float | None = None) -> int:
         """Append future whitespace bars after the last point. Returns end time (epoch s)."""
@@ -326,16 +346,64 @@ class SeriesCommon(_PaneBase):
         else:
             start = float(self._last_bar["time"])
         step = bar_seconds or self._interval
+        self._whitespace_step = float(step)
         end_t = int(start)
         for i in range(count):
             end_t = int(start + step * (i + 1))
-            self.run_script(f"{self.id}.series.update({{time:{end_t}}}, false);")
+            self.run_script(f"{self.id}.series.update({{time:{end_t}}}, false);", transient=True)
+        self._whitespace_end = end_t
         return end_t
 
+    def note_whitespace_end(self, end_t: int, bar_seconds: float | None = None) -> None:
+        """Track whitespace horizon (e.g. after buffer extend) for snapshot restore."""
+        self._whitespace_end = int(end_t)
+        if bar_seconds is not None:
+            self._whitespace_step = float(bar_seconds)
+
+    def _whitespace_snapshot_scripts(self, last_real_time: float | None) -> list[str]:
+        """Emit trailing whitespace ``update({time})`` after snapshot ``setData``."""
+        if self._whitespace_end is None or last_real_time is None:
+            return []
+        step = float(self._whitespace_step or self._interval or 1)
+        if step <= 0:
+            return []
+        scripts: list[str] = []
+        t = int(last_real_time)
+        end = int(self._whitespace_end)
+        while t < end:
+            t = int(t + step)
+            scripts.append(f"{self.id}.series.update({{time:{t}}}, false);")
+        return scripts
+
     def _update_markers(self):
-        self.run_script(
-            f"{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})"
-        )
+        with self.win.data_guard():
+            self.run_script(
+                f"{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})",
+                transient=True,
+            )
+
+    def _series_data_snapshot_scripts(self) -> list[str]:
+        """
+        Side-effect-free JS for reconnect snapshot from ``self.data`` + markers.
+
+        Does not reformat frames or emit ``clearDrawings`` / ``autoScale``.
+        Caller should hold ``win.data_guard()`` when racing live updates.
+        """
+        scripts: list[str] = []
+        last_real: float | None = None
+        if self.data is not None and not self.data.empty:
+            scripts.append(f"{self.id}.series.setData({js_data(self.data)});")
+            last_real = float(self.data.iloc[-1]["time"])
+        if self.markers:
+            scripts.append(
+                f"{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})"
+            )
+        scripts.extend(self._whitespace_snapshot_scripts(last_real))
+        return scripts
+
+    def data_snapshot_scripts(self) -> list[str]:
+        """Public per-series snapshot scripts (see ``_series_data_snapshot_scripts``)."""
+        return self._series_data_snapshot_scripts()
 
     def marker_list(self, markers: list):
         """
@@ -1168,29 +1236,32 @@ class Candlestick(SeriesCommon):
         :param df: columns: date/time, open, high, low, close, volume (if volume enabled).
         :param keep_drawings: keeps any drawings made through the toolbox. Otherwise, they will be deleted.
         """
-        if df is None or df.empty:
-            self.run_script(f"{self.id}.series.setData([])")
-            self.run_script(f"{self.id}.volumeSeries.setData([])")
-            self.candle_data = pd.DataFrame()
-            return
-        df = self._df_datetime_format(df)
-        self.candle_data = df.copy()
-        self._last_bar = df.iloc[-1]
-        self.run_script(f"{self.id}.series.setData({js_data(df)})")
+        with self.win.data_guard():
+            if df is None or df.empty:
+                self.run_script(f"{self.id}.series.setData([])", transient=True)
+                self.run_script(f"{self.id}.volumeSeries.setData([])", transient=True)
+                self.candle_data = pd.DataFrame()
+                return
+            df = self._df_datetime_format(df)
+            self.candle_data = df.copy()
+            self._last_bar = df.iloc[-1]
+            self.run_script(f"{self.id}.series.setData({js_data(df)})", transient=True)
 
-        if "volume" not in df:
-            return
-        volume = df.drop(columns=["open", "high", "low", "close"]).rename(
-            columns={"volume": "value"}
-        )
-        volume["color"] = self._volume_down_color
-        volume.loc[df["close"] > df["open"], "color"] = self._volume_up_color
-        self.run_script(f"{self.id}.volumeSeries.setData({js_data(volume)})")
+            if "volume" in df:
+                volume = df.drop(columns=["open", "high", "low", "close"]).rename(
+                    columns={"volume": "value"}
+                )
+                volume["color"] = self._volume_down_color
+                volume.loc[df["close"] > df["open"], "color"] = self._volume_up_color
+                self.run_script(
+                    f"{self.id}.volumeSeries.setData({js_data(volume)})", transient=True
+                )
 
-        for line in self._lines:
-            if line.name not in df.columns:
-                continue
-            line.set(df[["time", line.name]], format_cols=False)
+            for line in self._lines:
+                if line.name not in df.columns:
+                    continue
+                line.set(df[["time", line.name]], format_cols=False)
+        # Structural side effects (not part of the data snapshot).
         # set autoScale to true in case the user has dragged the price scale
         self.run_script(
             f"""
@@ -1212,23 +1283,32 @@ class Candlestick(SeriesCommon):
         :param historical_update: When True, update an existing bar by time (required when
             future whitespace bars extend past the last real bar).
         """
-        series = self._series_datetime_format(series) if not _from_tick else series
-        if series["time"] != self._last_bar["time"]:
-            self.candle_data.loc[self.candle_data.index[-1]] = self._last_bar
-            self.candle_data = pd.concat([self.candle_data, series.to_frame().T], ignore_index=True)
-            self._chart.events.new_bar._emit(self)
+        with self.win.data_guard():
+            series = self._series_datetime_format(series) if not _from_tick else series
+            if series["time"] != self._last_bar["time"]:
+                self.candle_data.loc[self.candle_data.index[-1]] = self._last_bar
+                self.candle_data = pd.concat(
+                    [self.candle_data, series.to_frame().T], ignore_index=True
+                )
+                self._chart.events.new_bar._emit(self)
 
-        self._last_bar = series
-        self.run_script(f"{self.id}.series.update({js_data(series)}, {jbool(historical_update)});")
-        if "volume" not in series:
-            return
-        volume = series.drop(["open", "high", "low", "close"]).rename({"volume": "value"})
-        volume["color"] = (
-            self._volume_up_color if series["close"] > series["open"] else self._volume_down_color
-        )
-        self.run_script(
-            f"{self.id}.volumeSeries.update({js_data(volume)}, {jbool(historical_update)});"
-        )
+            self._last_bar = series
+            self.run_script(
+                f"{self.id}.series.update({js_data(series)}, {jbool(historical_update)});",
+                transient=True,
+            )
+            if "volume" not in series:
+                return
+            volume = series.drop(["open", "high", "low", "close"]).rename({"volume": "value"})
+            volume["color"] = (
+                self._volume_up_color
+                if series["close"] > series["open"]
+                else self._volume_down_color
+            )
+            self.run_script(
+                f"{self.id}.volumeSeries.update({js_data(volume)}, {jbool(historical_update)});",
+                transient=True,
+            )
 
     def append_whitespace(self, count: int, bar_seconds: float | None = None) -> int:
         """Append future whitespace candle bars. Returns end time (epoch s)."""
@@ -1239,11 +1319,44 @@ class Candlestick(SeriesCommon):
         else:
             start = float(self._last_bar["time"])
         step = bar_seconds or self._interval
+        self._whitespace_step = float(step)
         end_t = int(start)
         for i in range(count):
             end_t = int(start + step * (i + 1))
-            self.run_script(f"{self.id}.series.update({{time:{end_t}}}, false);")
+            self.run_script(f"{self.id}.series.update({{time:{end_t}}}, false);", transient=True)
+        self._whitespace_end = end_t
         return end_t
+
+    def _series_data_snapshot_scripts(self) -> list[str]:
+        """
+        Snapshot from ``self.candle_data`` (OHLC), not empty ``self.data`` (H-01).
+
+        Also emits ``volumeSeries`` with the same up/down color rule as :meth:`set`.
+        Restores trailing whitespace tracked via ``append_whitespace`` / ``note_whitespace_end``.
+        """
+        scripts: list[str] = []
+        if self.candle_data is None or self.candle_data.empty:
+            if self.markers:
+                scripts.append(
+                    f"{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})"
+                )
+            return scripts
+
+        df = self.candle_data
+        scripts.append(f"{self.id}.series.setData({js_data(df)})")
+        if "volume" in df.columns:
+            volume = df.drop(columns=["open", "high", "low", "close"]).rename(
+                columns={"volume": "value"}
+            )
+            volume["color"] = self._volume_down_color
+            volume.loc[df["close"] > df["open"], "color"] = self._volume_up_color
+            scripts.append(f"{self.id}.volumeSeries.setData({js_data(volume)})")
+        if self.markers:
+            scripts.append(
+                f"{self.id}.seriesMarkers.setMarkers({json.dumps(list(self.markers.values()))})"
+            )
+        scripts.extend(self._whitespace_snapshot_scripts(float(df.iloc[-1]["time"])))
+        return scripts
 
     def update_from_tick(self, series: pd.Series, cumulative_volume: bool = False):
         """
@@ -1388,6 +1501,25 @@ class AbstractChart(Candlestick, _PaneBase):
         self.topbar: TopBar = TopBar(self)
         if toolbox:
             self.toolbox: ToolBox = ToolBox(self)
+
+    def data_snapshot_scripts(self) -> list[str]:
+        """
+        Collect reconnect data-snapshot scripts for every registered series.
+
+        Only series/marker (and candlestick volume) data is snapshot-backed.
+        Other per-bar mutations (table cells, price lines, legend text,
+        PositionTool P&L) remain structural and still buffer in the stream log.
+
+        Also walks ``_subcharts`` so tabbed SubChart series (set while the
+        browser was disconnected) are restored on connect — otherwise
+        create_line structural scripts replay empty and dataLens stays 0.
+        """
+        scripts: list[str] = []
+        for series in self._series_registry:
+            scripts.extend(series._series_data_snapshot_scripts())
+        for sub in getattr(self, "_subcharts", None) or []:
+            scripts.extend(sub.data_snapshot_scripts())
+        return scripts
 
     def fit(self):
         """
@@ -1629,7 +1761,6 @@ class AbstractChart(Candlestick, _PaneBase):
         percent: bool = True,
         lines: bool = True,
         color: str = "rgb(191, 195, 203)",
-        font_size: int = 11,
         font_family: str = "Monaco",
         text: str = "",
         color_based_on_candle: bool = False,
@@ -1638,6 +1769,7 @@ class AbstractChart(Candlestick, _PaneBase):
         """
         Configures the legend of the chart.
         :param pane_index: Which pane's legend to configure (default 0).
+        Legend type size is CSS-responsive (no Python font_size).
         """
         l_id = f"{self.id}.getOrCreateLegend({int(pane_index)})"
         if not visible:
@@ -1658,9 +1790,8 @@ class AbstractChart(Candlestick, _PaneBase):
         {l_id}.linesEnabled = {jbool(lines)}
         {l_id}.colorBasedOnCandle = {jbool(color_based_on_candle)}
         {l_id}.div.style.color = '{color}'
-        {l_id}.div.style.fontSize = '{font_size}px'
         {l_id}.div.style.fontFamily = '{font_family}'
-        {l_id}.text.innerText = '{text}';
+        {l_id}.text.innerText = '{text}'
         """
         )
 

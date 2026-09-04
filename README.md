@@ -181,7 +181,7 @@ if __name__ == '__main__':
     chart.crosshair(mode='normal', vert_color='#FFFFFF', vert_style='dotted',
                     horz_color='#FFFFFF', horz_style='dotted')
 
-    chart.legend(visible=True, font_size=14)
+    chart.legend(visible=True)
 
     chart.set(df)
 
@@ -247,7 +247,7 @@ ___
 
 ### 7. StreamChart — browser-based chart over HTTP/WebSocket:
 
-`StreamChart` spins up a local FastAPI/Uvicorn server and streams data to any browser tab. No desktop window is required — ideal for headless servers, notebooks, or remote development.
+`StreamChart` spins up a local FastAPI/Uvicorn server and streams data to any browser tab. No desktop window is required — ideal for headless servers, notebooks, or remote development. On (re)connect it rebuilds from a data snapshot (not a backlog of every `update()` while the tab was closed).
 
 ```python
 import pandas as pd

@@ -94,6 +94,39 @@ if __name__ == '__main__':
         time.sleep(0.1)
 ```
 
+## Reconnect behavior
+
+While no browser is connected, per-bar data scripts (`setData` / `update` / markers)
+are **not** buffered. On (re)connect the server:
+
+1. Replays a bounded **structural** script log (series creation, styling, drawings, …).
+2. Emits a **data snapshot** from Python state (OHLC/volume, line series, markers,
+   and whitespace from `append_whitespace`).
+
+Reopening a tab after hours of disconnected streaming therefore loads from current
+state instead of replaying every bar update. Same-page reconnects reload the page
+so structural replay always targets a fresh JavaScript context.
+
+**Snapshot boundary:** table cells, price lines, legend text, and PositionTool P&L
+updated every bar still append to the structural log and can grow if you mutate
+them per bar while disconnected.
+
+## Asyncio
+
+Use `show_async` when the chart shares an event loop with other coroutines:
+
+```python
+import asyncio
+from lightweight_charts import StreamChart
+
+async def main():
+    chart = StreamChart()
+    chart.set(df)
+    await chart.show_async(port=8080, open_browser=True)
+
+asyncio.run(main())
+```
+
 ## Using plugins with StreamChart
 
 All plugins work identically with `StreamChart`:
@@ -117,6 +150,8 @@ chart.show(block=True)
 | Window | pywebview desktop window | Any browser via HTTP |
 | Display | Requires display server | Headless compatible |
 | Access URL | n/a | Printed one-time token URL |
-| `show()` signature | `show(block)` | `show(port, host, open_browser, block)` |
+| `show()` signature | `show(block)` | `show(port, host, open_browser, block, …)` |
+| `show_async()` | Yes | Yes |
+| Reconnect | n/a | Structural replay + data snapshot |
 | Screenshot | `chart.screenshot()` | Not supported |
 | `JupyterChart` | Yes | No |
