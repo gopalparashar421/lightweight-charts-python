@@ -12,7 +12,7 @@ Usage::
     # asyncio
     await chart.show_async(port=8080)
 
-The printed URL includes a one-time security token; share it only with trusted viewers.
+The logged URL includes a one-time security token; share it only with trusted viewers.
 
 Reconnect model (v1.4.0+)
 -------------------------
@@ -30,6 +30,7 @@ a soft size warning fires if that log grows large.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import secrets
 import threading
@@ -55,6 +56,11 @@ _JS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
 
 # Soft bound for structural script log (defense-in-depth; M-02).
 _STRUCTURAL_LOG_WARN_THRESHOLD = 2000
+
+# Library-safe logger: no handlers of our own; apps (or logging.basicConfig)
+# decide where records go. NullHandler avoids "No handlers" noise.
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class StreamWindow(Window):
@@ -100,17 +106,15 @@ class StreamWindow(Window):
 
     def _append_structural(self, script: str) -> None:
         self.scripts.append(script)
-        if (
-            not self._structural_log_warned
-            and len(self.scripts) >= _STRUCTURAL_LOG_WARN_THRESHOLD
-        ):
+        if not self._structural_log_warned and len(self.scripts) >= _STRUCTURAL_LOG_WARN_THRESHOLD:
             self._structural_log_warned = True
-            print(
-                f"WARNING: StreamWindow structural script log has "
-                f"{len(self.scripts)} entries (threshold "
-                f"{_STRUCTURAL_LOG_WARN_THRESHOLD}). Only series/marker data is "
-                "snapshot-backed; per-bar table/price-line/legend/PositionTool "
-                "updates still buffer as structural and can grow unbounded."
+            logger.warning(
+                "StreamWindow structural script log has %d entries (threshold %d). "
+                "Only series/marker data is snapshot-backed; per-bar "
+                "table/price-line/legend/PositionTool updates still buffer as "
+                "structural and can grow unbounded.",
+                len(self.scripts),
+                _STRUCTURAL_LOG_WARN_THRESHOLD,
             )
 
     @property
@@ -183,8 +187,15 @@ class StreamWindow(Window):
         host: str = "127.0.0.1",
         debug: bool = False,
         cors_origins: list[str] | None = None,
+        log_level: str = "error",
     ) -> str:
-        """Build the FastAPI app and start uvicorn in a daemon thread."""
+        """Build the FastAPI app and start uvicorn in a daemon thread.
+
+        ``log_level`` is passed to uvicorn (default ``"error"`` keeps the
+        server quiet). Use ``"info"`` to surface startup and access logs via
+        the host app's logging handlers. ``log_config=None`` so uvicorn does
+        not call ``dictConfig`` and wipe existing handlers.
+        """
         self._host = host
         self._port = port
         self._server_ready.clear()
@@ -261,7 +272,7 @@ class StreamWindow(Window):
 
             # --- single-client guard ---
             if self._ws is not None:
-                print("WARNING: A second client attempted to connect; rejected with code 4002.")
+                logger.warning("A second client attempted to connect; rejected with code 4002.")
                 await websocket.close(code=4002)
                 return
 
@@ -305,7 +316,13 @@ class StreamWindow(Window):
         # explicit "/" route so that route takes priority.
         app.mount("/", StaticFiles(directory=_JS_DIR), name="static")
 
-        config = uvicorn.Config(app, host=host, port=port, log_level="error", log_config=None)
+        config = uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level=log_level,
+            log_config=None,
+        )
         self._server = uvicorn.Server(config)
 
         loop_ready = threading.Event()
@@ -322,9 +339,10 @@ class StreamWindow(Window):
                     98,
                     10048,
                 ):
-                    print(
-                        f"ERROR: Port {port} is already in use. "
-                        "Choose a different port with chart.show(port=<n>)."
+                    logger.error(
+                        "Port %d is already in use. "
+                        "Choose a different port with chart.show(port=<n>).",
+                        port,
                     )
                 else:
                     raise
@@ -339,9 +357,12 @@ class StreamWindow(Window):
 
 class StreamChart(AbstractChart):
     """
-    A chart served over HTTP/WebSocket.  Open the printed URL in any browser.
+    A chart served over HTTP/WebSocket.  Open the logged URL in any browser.
 
     ::
+
+        import logging
+        logging.basicConfig(level=logging.INFO)
 
         chart = StreamChart()
         chart.set(df)
@@ -377,6 +398,7 @@ class StreamChart(AbstractChart):
         block: bool = True,
         cors_origins: list[str] | None = None,
         debug: bool = False,
+        log_level: str = "error",
     ) -> str:
         """
         Start the chart server and optionally open a browser.
@@ -390,19 +412,21 @@ class StreamChart(AbstractChart):
         block:        Block until Ctrl-C (suitable for scripts).
         cors_origins: Extra allowed CORS origins.
         debug:        Enable FastAPI debug mode.
+        log_level:    Uvicorn log level (default ``"error"``). Pass ``"info"``
+                      to include startup/access logs in the host logging config.
         """
         url = self.win.show(
             port=port,
             host=host,
             cors_origins=cors_origins,
             debug=debug,
+            log_level=log_level,
         )
-        print(f"Chart server running at {url} — press Ctrl+C to stop")
+        logger.info("Chart server running at %s — press Ctrl+C to stop", url)
 
         if host not in ("127.0.0.1", "::1", "localhost"):
-            print(
-                "WARNING: Chart server is accessible from the network. "
-                "Ensure the token URL is kept private."
+            logger.warning(
+                "Chart server is accessible from the network. Ensure the token URL is kept private."
             )
 
         if open_browser:
@@ -423,6 +447,7 @@ class StreamChart(AbstractChart):
         open_browser: bool = False,
         cors_origins: list[str] | None = None,
         debug: bool = False,
+        log_level: str = "error",
     ) -> str:
         """
         Start the chart server, await readiness, and run until cancelled.
@@ -442,6 +467,7 @@ class StreamChart(AbstractChart):
             False,  # block
             cors_origins,
             debug,
+            log_level,
         )
         try:
             while True:

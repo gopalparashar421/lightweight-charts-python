@@ -1253,7 +1253,9 @@ class Candlestick(SeriesCommon):
                 )
                 volume["color"] = self._volume_down_color
                 volume.loc[df["close"] > df["open"], "color"] = self._volume_up_color
-                self.run_script(f"{self.id}.volumeSeries.setData({js_data(volume)})", transient=True)
+                self.run_script(
+                    f"{self.id}.volumeSeries.setData({js_data(volume)})", transient=True
+                )
 
             for line in self._lines:
                 if line.name not in df.columns:
@@ -1507,10 +1509,16 @@ class AbstractChart(Candlestick, _PaneBase):
         Only series/marker (and candlestick volume) data is snapshot-backed.
         Other per-bar mutations (table cells, price lines, legend text,
         PositionTool P&L) remain structural and still buffer in the stream log.
+
+        Also walks ``_subcharts`` so tabbed SubChart series (set while the
+        browser was disconnected) are restored on connect — otherwise
+        create_line structural scripts replay empty and dataLens stays 0.
         """
         scripts: list[str] = []
         for series in self._series_registry:
             scripts.extend(series._series_data_snapshot_scripts())
+        for sub in getattr(self, "_subcharts", None) or []:
+            scripts.extend(sub.data_snapshot_scripts())
         return scripts
 
     def fit(self):
