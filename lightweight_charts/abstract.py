@@ -211,7 +211,14 @@ class SeriesCommon(_PaneBase):
             if pd.api.types.is_numeric_dtype(df["time"]):
                 df["time"] = pd.to_datetime(df["time"], unit="s")
             else:
-                df["time"] = pd.to_datetime(df["time"])
+                df["time"] = pd.to_datetime(df["time"], errors="coerce")
+
+        if df["time"].isnull().any():
+            raise ValueError(
+                "Invalid 'time' values in DataFrame passed to _set_interval. "
+                "Please provide valid datetime values."
+        )
+    
         common_interval = df["time"].diff().value_counts()
         if common_interval.empty:
             return
