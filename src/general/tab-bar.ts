@@ -76,6 +76,7 @@ export class SubChartManager {
         this._activeId = handlerId;
         // Trigger resize so the chart fills the now-visible wrapper correctly
         entry.handler.reSize();
+        entry.tabEl.scrollIntoView({ inline: "nearest", block: "nearest" });
     }
 
     /**

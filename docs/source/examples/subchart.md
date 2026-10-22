@@ -2,7 +2,8 @@
 
 Tabbed subcharts let you switch between multiple independent charts inside a
 single desktop window. Call `create_subchart()` on the main chart; a tab bar
-appears automatically above the charts on the first call.
+appears automatically above the charts on the first call. When there are more
+tabs than fit the window width, the tab bar scrolls horizontally.
 
 > **Note:** This is separate from the **Panes API** (`pane_index`, `add_pane()`),
 > which stacks multiple series vertically in one chart view. See

@@ -211,7 +211,8 @@ class Events:
 class BulkRunScript:
     def __init__(self, script_func):
         self.enabled = False
-        self.scripts = []
+        # list of (script, transient) — tag preserved through batching (Plan 013 M-01)
+        self.scripts: list[tuple[str, bool]] = []
         self.script_func = script_func
 
     def __enter__(self):
@@ -219,8 +220,22 @@ class BulkRunScript:
 
     def __exit__(self, *args):
         self.enabled = False
-        self.script_func("\n".join(self.scripts))
+        items = self.scripts
         self.scripts = []
+        structural = [s for s, transient in items if not transient]
+        transient_scripts = [s for s, transient in items if transient]
+        # Flush separately so mixed batches are never one untagged structural blob.
+        if structural:
+            self._flush("\n".join(structural), transient=False)
+        if transient_scripts:
+            self._flush("\n".join(transient_scripts), transient=True)
 
-    def add_script(self, script):
-        self.scripts.append(script)
+    def _flush(self, script: str, *, transient: bool) -> None:
+        try:
+            self.script_func(script, transient=transient)
+        except TypeError:
+            # pywebview Window.script_func accepts only the script string.
+            self.script_func(script)
+
+    def add_script(self, script: str, transient: bool = False) -> None:
+        self.scripts.append((script, transient))

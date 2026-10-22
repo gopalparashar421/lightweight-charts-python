@@ -32,7 +32,7 @@ if __name__ == "__main__":
         horz_style="dotted",
     )
 
-    chart.legend(visible=True, font_size=14)
+    chart.legend(visible=True)
 
     chart.set(df)
 

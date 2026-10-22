@@ -319,9 +319,11 @@ ___
 
 
 
-```{py:method} legend(visible: bool, ohlc: bool, percent: bool, lines: bool, color: COLOR, font_size: int, font_family: str, text: str, color_based_on_candle: bool)
+```{py:method} legend(visible: bool, ohlc: bool, percent: bool, lines: bool, color: COLOR, font_family: str, text: str, color_based_on_candle: bool)
 
 Configures the legend of the chart.
+
+Legend type size is CSS-responsive (`clamp()` via shared chrome tokens). There is no Python `font_size` parameter — pass content and color/family only.
 ```
 ___
 
@@ -446,7 +448,7 @@ ___
 
 Creates a tabbed sub-chart inside the same webview window and returns a {py:class}`SubChart` instance.
 
-On the **first call**, a tab bar is injected above the charts and the main chart is assigned a tab labelled `main_label`. On subsequent calls `main_label` is ignored.
+On the **first call**, a tab bar is injected above the charts and the main chart is assigned a tab labelled `main_label`. On subsequent calls `main_label` is ignored. When tab labels exceed the available width, the tab bar scrolls horizontally.
 
 See the [Subcharts example](../examples/subchart.md).
 ```
