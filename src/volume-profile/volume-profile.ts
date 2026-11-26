@@ -17,6 +17,7 @@ import { positionsBox } from '../helpers/dimensions/positions';
 interface VolumeProfileItem {
 	y: Coordinate | null;
 	width: number;
+	color?: string;
 }
 
 interface VolumeProfileRendererData {
@@ -30,6 +31,7 @@ interface VolumeProfileRendererData {
 interface VolumeProfileDataPoint {
 	price: number;
 	vol: number;
+	color?: string;
 }
 
 export interface VolumeProfileData {
@@ -48,26 +50,7 @@ class VolumeProfileRenderer implements IPrimitivePaneRenderer {
 		target.useBitmapCoordinateSpace(scope => {
 			if (this._data.x === null || this._data.top === null) return;
 			const ctx = scope.context;
-			const horizontalPositions = positionsBox(
-				this._data.x,
-				this._data.x + this._data.width,
-				scope.horizontalPixelRatio
-			);
-			const verticalPositions = positionsBox(
-				this._data.top,
-				this._data.top - this._data.columnHeight * this._data.items.length,
-				scope.verticalPixelRatio
-			);
 
-			ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
-			ctx.fillRect(
-				horizontalPositions.position,
-				verticalPositions.position,
-				horizontalPositions.length,
-				verticalPositions.length
-			);
-
-			ctx.fillStyle = 'rgba(80, 80, 255, 0.8)';
 			this._data.items.forEach(row => {
 				if (row.y === null) return;
 				const itemVerticalPos = positionsBox(
@@ -80,6 +63,7 @@ class VolumeProfileRenderer implements IPrimitivePaneRenderer {
 					this._data.x! + row.width,
 					scope.horizontalPixelRatio
 				);
+				ctx.fillStyle = row.color ?? 'rgba(80, 80, 255, 0.8)';
 				ctx.fillRect(
 					itemHorizontalPos.position,
 					itemVerticalPos.position,
@@ -125,6 +109,7 @@ class VolumeProfilePaneView implements IPrimitivePaneView {
 		this._items = data.profile.map(row => ({
 			y: series.priceToCoordinate(row.price),
 			width: (this._width * row.vol) / maxVolume,
+			color: row.color,
 		}));
 	}
 
@@ -167,6 +152,17 @@ export class VolumeProfile implements ISeriesPrimitive<Time> {
 	}
 	updateAllViews() {
 		this._paneViews.forEach(pw => pw.update());
+	}
+
+	updateData(vpData: VolumeProfileData) {
+		this._vpData = vpData;
+		this._minPrice = Infinity;
+		this._maxPrice = -Infinity;
+		this._vpData.profile.forEach(item => {
+			if (item.price < this._minPrice) this._minPrice = item.price;
+			if (item.price > this._maxPrice) this._maxPrice = item.price;
+		});
+		this.updateAllViews();
 	}
 
 	// Ensures that the VP is within autoScale

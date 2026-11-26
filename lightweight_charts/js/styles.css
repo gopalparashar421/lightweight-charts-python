@@ -7,6 +7,22 @@
 	--border-color: #3C434C;
 	--color: #d8d9db;
 	--active-color: #ececed;
+
+	/* Responsive chrome type scale (Plan 012 / Q2: 480×320–2560×1440, HiDPI 1x/2x).
+	   Preferred formulas are vw-based so @media consumers and engines without
+	   @container still scale; per-pane legend also overrides with cqw below. */
+	--chrome-bp-sm: 480px;
+	--chrome-bp-md: 768px;
+	--chrome-bp-lg: 1280px;
+	--chrome-bp-xl: 1920px;
+	--chrome-font-xs: clamp(8px, 0.25vw + 6.5px, 11px);
+	--chrome-font-sm: clamp(9px, 0.3vw + 7.5px, 14px);
+	--chrome-font-md: clamp(10px, 0.35vw + 8px, 16px);
+	--chrome-font-lg: clamp(12px, 0.45vw + 9px, 20px);
+	--chrome-pad-y: clamp(1px, 0.08vw + 0.5px, 4px);
+	--chrome-pad-x: clamp(3px, 0.15vw + 2px, 8px);
+	--chrome-table-pad-y: clamp(0.1rem, 0.05vw + 0.08rem, 0.35rem);
+	--chrome-table-letter-spacing: clamp(0.02rem, 0.01vw + 0.015rem, 0.04rem);
 }
 
 html,
@@ -41,6 +57,8 @@ body {
 	min-height: 0;
 	width: 100%;
 	position: relative;
+	container-type: inline-size;
+	container-name: chart-handler;
 }
 
 .chart-root {
@@ -127,25 +145,51 @@ body {
 	display: flex;
 	align-items: center;
 	flex-shrink: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	flex-wrap: nowrap;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-color) var(--bg-color);
+}
+.topbar::-webkit-scrollbar {
+	height: 6px;
+}
+.topbar::-webkit-scrollbar-track {
+	background: var(--bg-color);
+}
+.topbar::-webkit-scrollbar-thumb {
+	background: var(--border-color);
+	border-radius: 3px;
 }
 
 .topbar-container {
 	display: flex;
 	align-items: center;
 	flex-grow: 1;
+	flex-shrink: 0;
+	min-width: max-content;
 }
 
 .topbar-button {
 	border: none;
-	padding: 2px 5px;
+	padding: var(--chrome-pad-y) var(--chrome-pad-x);
 	margin: 4px 10px;
-	font-size: 13px;
+	font-size: var(--chrome-font-md);
 	border-radius: 4px;
 	color: var(--color);
 	background-color: transparent;
+	flex-shrink: 0;
+	white-space: nowrap;
 }
 .topbar-button:hover {
 	background-color: var(--hover-bg-color)
+}
+
+.topbar-switcher {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	white-space: nowrap;
 }
 
 .topbar-button:active {
@@ -168,8 +212,10 @@ body {
 
 .topbar-textbox {
 	margin: 0px 18px;
-	font-size: 16px;
+	font-size: var(--chrome-font-lg);
 	color: var(--color);
+	flex-shrink: 0;
+	white-space: nowrap;
 }
 
 .topbar-textbox-input {
@@ -195,6 +241,7 @@ body {
 	width: 1px;
 	height: 20px;
 	background-color: var(--border-color);
+	flex-shrink: 0;
 }
 
 .searchbox {
@@ -249,6 +296,7 @@ body {
 	left: 10px;
 	display: none;
 	flex-direction: column;
+	font-size: var(--chrome-font-sm);
 }
 .series-container {
     display: flex;
@@ -256,6 +304,7 @@ body {
     pointer-events: auto;
     overflow-y: auto;
     max-height: 80vh;
+    font-size: inherit;
 }
 .series-container::-webkit-scrollbar {
     width: 0px;
@@ -289,7 +338,7 @@ body {
 	border-radius: 4px;
 	cursor: pointer;
 	color: rgba(255, 255, 255, 0.45);
-	font-size: 11px;
+	font-size: var(--chrome-font-xs);
 	line-height: 1;
 	pointer-events: auto;
 }
@@ -320,7 +369,7 @@ body {
 	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
 	overflow: hidden;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	font-size: 12px;
+	font-size: var(--chrome-font-sm);
 }
 .legend-modal-header {
 	display: flex;
@@ -332,7 +381,7 @@ body {
 }
 .legend-modal-title {
 	color: #d1d4dc;
-	font-size: 13px;
+	font-size: var(--chrome-font-md);
 	font-weight: 600;
 	letter-spacing: 0.2px;
 }
@@ -340,7 +389,7 @@ body {
 	background: none;
 	border: none;
 	color: rgba(255, 255, 255, 0.4);
-	font-size: 14px;
+	font-size: var(--chrome-font-md);
 	cursor: pointer;
 	padding: 2px 6px;
 	border-radius: 4px;
@@ -370,7 +419,7 @@ body {
 }
 .legend-modal-section-title {
 	color: rgba(255, 255, 255, 0.3);
-	font-size: 10px;
+	font-size: var(--chrome-font-xs);
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.9px;
@@ -385,7 +434,7 @@ body {
 }
 .legend-modal-field-label {
 	color: #b2b5be;
-	font-size: 12px;
+	font-size: var(--chrome-font-sm);
 	flex: 1;
 	white-space: nowrap;
 }
@@ -394,7 +443,7 @@ body {
 	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 4px;
 	color: #d1d4dc;
-	font-size: 12px;
+	font-size: var(--chrome-font-sm);
 	padding: 3px 6px;
 	min-width: 80px;
 	max-width: 130px;
@@ -430,20 +479,37 @@ body {
 	display: flex;
 	flex-direction: row;
 	flex-shrink: 0;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	overflow-y: hidden;
 	background-color: var(--bg-color);
 	border-bottom: 2px solid var(--border-color);
 	padding: 0 4px;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-color) var(--bg-color);
+}
+.subchart-tab-bar::-webkit-scrollbar {
+	height: 6px;
+}
+.subchart-tab-bar::-webkit-scrollbar-track {
+	background: var(--bg-color);
+}
+.subchart-tab-bar::-webkit-scrollbar-thumb {
+	background: var(--border-color);
+	border-radius: 3px;
 }
 
 .subchart-tab {
 	border: none;
-	padding: 2px 5px;
+	padding: var(--chrome-pad-y) var(--chrome-pad-x);
 	margin: 4px 10px;
-	font-size: 13px;
+	font-size: var(--chrome-font-md);
 	border-radius: 4px;
 	color: var(--color);
 	background-color: transparent;
 	cursor: pointer;
+	flex-shrink: 0;
+	white-space: nowrap;
 }
 
 .subchart-tab:hover {
@@ -455,3 +521,57 @@ body {
 	color: var(--active-color) !important;
 	font-weight: 500;
 }
+
+/* HTML table chrome (typography/spacing only; colors/borders/align stay inline) */
+.lw-table {
+	font-size: var(--chrome-font-sm);
+	font-variant-numeric: tabular-nums;
+	border-radius: 5px;
+	color: white;
+}
+
+.lw-table table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.lw-table th {
+	letter-spacing: var(--chrome-table-letter-spacing);
+	padding: var(--chrome-table-pad-y) 0;
+	font-weight: 500;
+}
+
+.lw-table-section {
+	display: flex;
+	width: 100%;
+	padding: var(--chrome-table-pad-y) 0;
+	background-color: rgb(30, 30, 30);
+}
+
+.lw-table-section-cell {
+	flex: 1;
+	text-align: center;
+}
+
+/* Per-pane legend: prefer container width when @container is supported */
+@container chart-handler (min-width: 0) {
+	.legend {
+		font-size: clamp(9px, 0.3cqw + 7.5px, 14px);
+	}
+	.legend-modal {
+		font-size: clamp(9px, 0.3cqw + 7.5px, 14px);
+	}
+	.legend-modal-title,
+	.legend-modal-close {
+		font-size: clamp(10px, 0.35cqw + 8px, 16px);
+	}
+	.legend-modal-section-title,
+	.legend-cross-btn {
+		font-size: clamp(8px, 0.25cqw + 6.5px, 11px);
+	}
+	.legend-modal-field-label,
+	.legend-modal-input {
+		font-size: clamp(9px, 0.3cqw + 7.5px, 14px);
+	}
+}
+

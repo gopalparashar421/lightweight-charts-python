@@ -22,6 +22,8 @@ Topbar widgets share common parameters:
 * `name`: The name of the widget which can be used to access it from the `topbar` dictionary.
 * `align`: The alignment of the widget (either `'left'` or `'right'` which determines which side of the topbar the widget will be placed upon.
 
+Chrome typography (button, switcher, textbox, menu labels) scales responsively with the embedded window size via CSS `clamp()` tokens. There is no Python font-size API for the top bar. When left and right widgets exceed the available width, the top bar scrolls horizontally (widgets do not shrink or wrap).
+
 ___
 
 
